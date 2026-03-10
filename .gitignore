@@ -4,7 +4,7 @@ npm-debug.log
 yarn-error.log
 test
 boostrap
-
+.kilocode
 # Laravel 4 specific
 bootstrap/compiled.php
 app/storage/
