@@ -5,8 +5,14 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
+import VueApexCharts from 'vue3-apexcharts';
+import { initializeThemeOnLoad } from './Composables/useTheme.js';
+import FontAwesomePlugin from './Plugins/fontawesome.js';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+// Inicializar tema inmediatamente para evitar flash de tema incorrecto
+initializeThemeOnLoad();
+
+const appName = import.meta.env.VITE_APP_NAME || 'MAYA';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -19,6 +25,8 @@ createInertiaApp({
         return createApp({ render: () => h(App, props) })
             .use(plugin)
             .use(ZiggyVue)
+            .use(VueApexCharts)
+            .use(FontAwesomePlugin)
             .mount(el);
     },
     progress: {

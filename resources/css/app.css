@@ -1,3 +1,92 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* =========================================
+   PALETA DE COLORES - ECOSISTEMA MAYA
+   ========================================= */
+
+:root {
+  /* ---------------------------------------
+     1. Colores de Marca y Semánticos (Globales)
+     --------------------------------------- */
+  --maya-primary: #00A6D7;          /* Primario MAYA (Cian/Azul brillante) */
+  --maya-primary-alpha: #00A6D71A;  /* Primario con 10% de opacidad (Fondos de iconos) */
+  --maya-primary-dark: #008fb8;     /* Primario hover/focus (más oscuro) */
+  --maya-primary-light: #e6f7fb;    /* Primario fondo hover suave */
+
+  --maya-success: #10b981;          /* Verde Esmeralda (Entregas Exitosas/PoD) */
+  --maya-success-alpha: #10b9811A;  /* Éxito 10% opacidad */
+  --maya-success-dark: #059669;     /* Éxito hover/focus */
+  --maya-success-light: #d1fae5;    /* Éxito fondo hover suave */
+
+  --maya-warning: #f97316;          /* Naranja Logístico (Recolecciones/Acción) */
+  --maya-warning-alpha: #f973161A;  /* Alerta 10% opacidad */
+  --maya-warning-dark: #ea580c;     /* Advertencia hover/focus */
+  --maya-warning-light: #ffedd5;    /* Advertencia fondo hover suave */
+
+  --maya-danger: #ef4444;           /* Rojo Precisión (Incidencias/Retrasos) */
+  --maya-danger-alpha: #ef44441A;   /* Peligro 10% opacidad */
+  --maya-danger-dark: #dc2626;      /* Peligro hover/focus */
+  --maya-danger-light: #fee2e2;     /* Peligro fondo hover suave */
+
+  /* ---------------------------------------
+     2. Tema Claro (Light Mode - Por Defecto)
+     --------------------------------------- */
+  --maya-bg-base: #f8fafc;          /* Fondo principal de la app (slate-50) */
+  --maya-bg-surface: #ffffff;       /* Fondo de tarjetas y cabecera (white) */
+  --maya-bg-sidebar: #ffffff;       /* Fondo del menú lateral (white) */
+  
+  --maya-text-main: #0f172a;        /* Texto principal, títulos (slate-900) */
+  --maya-text-muted: #64748b;       /* Texto secundario, descripciones (slate-500) */
+  
+  --maya-border: #e2e8f0;           /* Bordes suaves de tarjetas (slate-200) */
+  
+  --maya-hover-surface: #f1f5f9;    /* Hover en botones o menús (slate-100) */
+}
+
+/* ---------------------------------------
+   3. Tema Oscuro (Dark Mode)
+   Se activa agregando la clase 'dark' al <html> o <body>
+   --------------------------------------- */
+.dark {
+  --maya-bg-base: #020617;          /* Fondo principal muy oscuro (slate-950) */
+  --maya-bg-surface: #0f172a;       /* Fondo de tarjetas, cabecera y sidebar (slate-900) */
+  --maya-bg-sidebar: #0f172a;       /* Menú lateral oscuro (slate-900) */
+
+  --maya-text-main: #ffffff;        /* Texto principal blanco para máximo contraste */
+  --maya-text-muted: #e2e8f0;       /* Texto secundario más claro (slate-200) para mejor legibilidad */
+
+  --maya-border: #334155;           /* Bordes más visibles (slate-700) */
+
+  --maya-hover-surface: #1e293b;    /* Hover en botones o menús (slate-800) */
+
+  /* Colores de marca en modo oscuro - más brillantes para mejor visibilidad */
+  --maya-primary-dark: #00c3fc;     /* Primario hover (más brillante en dark) */
+  --maya-primary-light: #0f172a;    /* Fondo primario hover suave (más oscuro) */
+
+  --maya-success-dark: #34d399;     /* Éxito hover (más brillante) */
+  --maya-success-light: #064e3b;    /* Fondo éxito hover suave */
+
+  --maya-warning-dark: #fb923c;     /* Advertencia hover (más brillante) */
+  --maya-warning-light: #7c2d12;    /* Fondo advertencia hover suave */
+
+  --maya-danger-dark: #f87171;      /* Peligro hover (más brillante) */
+  --maya-danger-light: #7f1d1d;     /* Fondo peligro hover suave */
+}
+
+/* =========================================
+   EJEMPLO DE APLICACIÓN EN ELEMENTOS HTML
+   ========================================= */
+body {
+  background-color: var(--maya-bg-base);
+  color: var(--maya-text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.card {
+  background-color: var(--maya-bg-surface);
+  border: 1px solid var(--maya-border);
+}
+
+.text-primary { color: var(--maya-primary); }
+.bg-primary-light { background-color: var(--maya-primary-alpha); }
