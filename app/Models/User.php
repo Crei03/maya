@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -21,7 +22,12 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
+
+    public const ROLE_ADMIN = 'admin';
+    public const ROLE_MESSENGER = 'messenger';
+    public const ROLE_USER = 'user';
 
     /**
      * The attributes that should be hidden for serialization.
@@ -44,5 +50,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function manifests(): HasMany
+    {
+        return $this->hasMany(Manifest::class, 'messenger_id');
+    }
+
+    public function scopeMessengers($query)
+    {
+        return $query->where('role', self::ROLE_MESSENGER);
     }
 }
