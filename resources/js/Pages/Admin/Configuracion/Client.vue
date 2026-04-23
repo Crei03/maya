@@ -2,8 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import AdminDataTable from '@/Components/Admin/AdminDataTable.vue';
-import ClientFilters from '@/Components/Admin/ClientFilters.vue';
+import DataTable from '@/Components/Admin/DataTable.vue';
+import Filters from '@/Components/Filters.vue';
 import ColumnVisibilitySelector from '@/Components/Admin/ColumnVisibilitySelector.vue';
 import RefreshButton from '@/Components/Admin/RefreshButton.vue';
 import ModalForm from '@/Components/Admin/ModalForm.vue';
@@ -111,6 +111,17 @@ const filterCorregimientoOptions = computed(() => (selectedFilterDistrict.value?
     id: Number(corregimiento.id_corregimiento),
     valor: corregimiento.corregimiento,
 })));
+
+const filterFields = computed(() => ([
+    { key: 'cliente', type: 'text', placeholder: 'Cliente' },
+    { key: 'residencia_id', type: 'select', valueType: 'number', placeholder: 'Residencia (todas)', options: residenciaOptions.value },
+    { key: 'provincia_id', type: 'select', valueType: 'number', placeholder: 'Provincia (todas)', options: provinceOptions.value },
+    { key: 'distrito_id', type: 'select', valueType: 'number', placeholder: 'Distrito (todos)', options: filterDistrictOptions.value },
+    { key: 'corregimiento_id', type: 'select', valueType: 'number', placeholder: 'Corregimiento (todos)', options: filterCorregimientoOptions.value },
+    { key: 'calle', type: 'text', placeholder: 'Calle' },
+    { key: 'numero', type: 'text', placeholder: 'Numero' },
+    { key: 'codigo_postal', type: 'text', placeholder: 'Codigo Postal' },
+]));
 
 const clientFormFields = computed(() => [
     { key: 'nombre', label: 'Nombre', type: 'text', placeholder: 'Ingresa el nombre' },
@@ -437,33 +448,16 @@ onMounted(async () => {
                 </button>
             </div>
     
-            <ClientFilters
+            <Filters
                 v-if="showFilters"
-                :cliente="filters.cliente"
-                :residencia-id="filters.residencia_id"
-                :provincia-id="filters.provincia_id"
-                :distrito-id="filters.distrito_id"
-                :corregimiento-id="filters.corregimiento_id"
-                :calle="filters.calle"
-                :numero="filters.numero"
-                :codigo-postal="filters.codigo_postal"
-                :residencia-options="residenciaOptions"
-                :provincia-options="provinceOptions"
-                :distrito-options="filterDistrictOptions"
-                :corregimiento-options="filterCorregimientoOptions"
-                @update:cliente="filters.cliente = $event"
-                @update:residencia-id="filters.residencia_id = $event"
-                @update:provincia-id="filters.provincia_id = $event"
-                @update:distrito-id="filters.distrito_id = $event"
-                @update:corregimiento-id="filters.corregimiento_id = $event"
-                @update:calle="filters.calle = $event"
-                @update:numero="filters.numero = $event"
-                @update:codigo-postal="filters.codigo_postal = $event"
+                :fields="filterFields"
+                :model-value="filters"
+                @update:model-value="Object.assign(filters, $event)"
                 @apply="applyFilters"
                 @clear="clearFilters"
             />
     
-            <AdminDataTable
+            <DataTable
                 :columns="columns"
                 :rows="clients"
                 :visible-columns="visibleColumns"

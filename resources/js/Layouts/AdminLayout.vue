@@ -39,7 +39,7 @@ const navigation = [
     { name: 'Envíos', href: '#', icon: ['fas', 'box'], current: false },
     { name: 'Mensajeros', href: '#', icon: ['fas', 'users'], current: false },
     { name: 'Reportes', href: '#', icon: ['fas', 'chart-line'], current: false },
-    { name: 'Configuración', href: '#', icon: ['fas', 'gear'], current: false },
+    { name: 'Configuración', href: route('admin.configuracion'), icon: ['fas', 'gear'], current: route().current('admin.configuracion') },
 ];
 </script>
 
@@ -286,15 +286,15 @@ const navigation = [
                     <!-- Separator -->
                     <div class="hidden lg:block lg:h-6 lg:w-px lg:bg-[var(--maya-border)]" aria-hidden="true" />
 
-                    <!-- Profile dropdown -->
+                    <!-- User dropdown -->
                     <div class="flex items-center gap-x-4">
                         <img
-                            :src="user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.full_name)}&background=00A6D7&color=fff`"
+                            :src="user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00A6D7&color=fff`"
                             alt=""
                             class="h-8 w-8 rounded-full bg-[var(--maya-bg-base)]"
                         />
                         <span class="hidden text-sm font-semibold leading-6 text-[var(--maya-text-main)] lg:block">
-                            {{ user.full_name }}
+                            {{ user.name }}
                         </span>
                     </div>
                 </div>
