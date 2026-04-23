@@ -99,6 +99,7 @@ import {
     faShieldAlt,
     faHistory,
     faClockRotateLeft,
+    faTableColumns,
 } from '@fortawesome/free-solid-svg-icons';
 
 // Importar iconos regulares (Regular)
@@ -220,6 +221,7 @@ library.add(
     faShieldAlt,
     faHistory,
     faClockRotateLeft,
+    faTableColumns,
     // Regular
     faCircleRegular,
     faCalendarRegular,
