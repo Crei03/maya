@@ -21,36 +21,36 @@ use Inertia\Inertia;
 */
 
 // Dashboard de KPIs
-Route::get('/admin/dashboard', [KPIController::class, 'dashboard'])
+Route::get('/dashboard', [KPIController::class, 'dashboard'])
     ->name('admin.dashboard');
 
 // Conciliación de Cierre
-Route::get('/admin/conciliacion-cierre', function () {
+Route::get('/conciliacion-cierre', function () {
     return Inertia::render('Admin/ConciliacionCierre');
 })->name('admin.conciliacion-cierre');
 
 // Versión Mobile de Conciliación
-Route::get('/admin/conciliacion-cierre/mobile', function () {
+Route::get('/conciliacion-cierre/mobile', function () {
     return Inertia::render('Admin/ConciliacionCierre/Mobile');
 })->name('admin.conciliacion-cierre.mobile');
 
 // Asignación de Transporte (Manifiestos)
-Route::get('/admin/asignacion-transporte', [ManifestController::class, 'index'])
+Route::get('/asignacion-transporte', [ManifestController::class, 'index'])
     ->name('admin.asignacion-transporte');
 
 // Configuración Admin
-Route::get('/admin/configuracion', [SettingsController::class, 'index'])
+Route::get('/configuracion', [SettingsController::class, 'index'])
     ->name('admin.configuracion');
 
-Route::get('/admin/configuracion/clientes', [SettingsController::class, 'clients'])
+Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
     ->name('admin.configuracion.clientes');
 
 // Versión Mobile de Asignación de Transporte
-Route::get('/admin/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
+Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
     ->name('admin.asignacion-transporte.mobile');
 
 // API endpoints para Manifiestos
-Route::prefix('api/admin/manifests')->group(function () {
+Route::prefix('api/manifests')->group(function () {
     Route::get('/', [ManifestController::class, 'list'])
         ->name('admin.manifests.list');
     Route::post('/', [ManifestController::class, 'store'])
@@ -62,7 +62,7 @@ Route::prefix('api/admin/manifests')->group(function () {
 });
 
 // API endpoints para KPIs
-Route::prefix('api/admin')->group(function () {
+Route::prefix('api')->group(function () {
     Route::get('/kpis', [KPIController::class, 'index'])
         ->name('admin.kpis.index');
 
