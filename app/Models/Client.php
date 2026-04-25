@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasTenant;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +15,7 @@ use Illuminate\Support\Str;
 
 class Client extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, HasTenant, Notifiable;
 
     public const ROLE_CLIENT = 'client';
 
@@ -29,6 +31,7 @@ class Client extends Authenticatable
 
     protected $fillable = [
         'id',
+        'tenant_id',
         'first_name',
         'last_name',
         'full_name',

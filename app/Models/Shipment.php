@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasTenant;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -34,7 +36,7 @@ use Illuminate\Support\Str;
  */
 class Shipment extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     /**
      * Nombre de la tabla asociada.
@@ -58,6 +60,7 @@ class Shipment extends Model
      */
     protected $fillable = [
         'id',
+        'tenant_id',
         'tracking_number',
         'sender_id',
         'recipient_name',

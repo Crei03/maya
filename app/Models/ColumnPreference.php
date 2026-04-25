@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Traits\HasTenant;
+
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +13,7 @@ use Illuminate\Support\Str;
 
 class ColumnPreference extends Model
 {
-    use HasFactory;
+    use HasFactory, HasTenant;
 
     protected $table = 'column_preferences';
 
@@ -21,6 +23,7 @@ class ColumnPreference extends Model
 
     protected $fillable = [
         'id',
+        'tenant_id',
         'user_id',
         'module',
         'visible_columns',
