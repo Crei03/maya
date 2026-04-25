@@ -2,11 +2,11 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import DataTable from '@/Components/Admin/DataTable.vue';
-import Filters from '@/Components/Filters.vue';
-import ColumnVisibilitySelector from '@/Components/Admin/ColumnVisibilitySelector.vue';
-import RefreshButton from '@/Components/Admin/RefreshButton.vue';
-import ModalForm from '@/Components/Admin/ModalForm.vue';
+import DataTable from '@/Components/DataTable.vue';
+import Filters from '@/Components/buttons/Filters.vue';
+import ColumnVisibilitySelector from '@/Components/buttons/ColumnVisibilitySelector.vue';
+import RefreshButton from '@/Components/buttons/RefreshButton.vue';
+import ModalForm from '@/Components/ModalForm.vue';
 
 const columnPreferenceModule = 'admin.clients';
 const activeSection = ref(null);
@@ -481,6 +481,7 @@ onMounted(async () => {
             :errors="errors"
             :loading="saving"
             submit-label="Guardar cliente"
+            :columns="2"
             @update:model-value="Object.assign(form, $event)"
             @close="closeModal"
             @submit="createClient"

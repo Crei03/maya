@@ -1,8 +1,7 @@
 <script setup>
 import Checkbox from '@/Components/input/Checkbox.vue';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/input/InputError.vue';import InputLabel from '@/Components/input/InputLabel.vue';
 import PrimaryButton from '@/Components/buttons/PrimaryButton.vue';
 import TextInput from '@/Components/input/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';

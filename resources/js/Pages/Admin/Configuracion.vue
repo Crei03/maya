@@ -2,11 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import SettingsSectionButton from '@/Components/Admin/SettingsSectionButton.vue';
-import DataTable from '@/Components/Admin/DataTable.vue';
-import ColumnVisibilitySelector from '@/Components/Admin/ColumnVisibilitySelector.vue';
-import RefreshButton from '@/Components/Admin/RefreshButton.vue';
-import ModalForm from '@/Components/Admin/ModalForm.vue';
+import SettingsSectionButton from '@/Components/SettingsSectionButton.vue';
 
 const columnPreferenceModule = 'admin.clients';
 const activeSection = ref(null);
@@ -16,6 +12,7 @@ const perPage = ref(15);
 
 const sections = [
     { key: 'clientes', label: 'Clientes', icon: ['fas', 'user'], route: route('admin.configuracion.clientes') },
+    { key: 'usuarios', label: 'Usuarios', icon: ['fas', 'users'], route: route('admin.configuracion.usuarios') },
     { key: 'transporte', label: 'Transporte', icon: ['fas', 'truck'] },
     { key: 'conductor', label: 'Conductor', icon: ['fas', 'id-card'] },
     { key: 'roles', label: 'Roles', icon: ['fas', 'shield-alt'] },

@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue';
 import Modal from '@/Components/Modal.vue';
-import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
+import InputError from '@/Components/input/InputError.vue';
+import InputLabel from '@/Components/input/InputLabel.vue';
 import TextInput from '@/Components/input/TextInput.vue';
 
 const props = defineProps({
@@ -42,6 +42,10 @@ const props = defineProps({
         type: String,
         default: '2xl',
     },
+    columns: {
+        type: Number,
+        default: 2,
+    },
 });
 
 const emit = defineEmits(['close', 'submit', 'update:modelValue']);
@@ -54,6 +58,10 @@ const updateField = (key, value) => {
 };
 
 const normalizedFields = computed(() => props.fields || []);
+
+const gridClass = computed(() => {
+    return props.columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+});
 </script>
 
 <template>
@@ -64,14 +72,14 @@ const normalizedFields = computed(() => props.fields || []);
                 {{ description }}
             </p>
 
-            <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="mt-5 grid gap-4" :class="gridClass">
                 <div
                     v-for="field in normalizedFields"
                     :key="field.key"
                     class="min-w-0"
                     :style="field.colSpan ? { gridColumn: `span ${field.colSpan} / span ${field.colSpan}` } : undefined"
                 >
-                    <InputLabel :value="field.label" />
+                    <InputLabel v-if="field.type !== 'switch'" :value="field.label" />
 
                     <template v-if="field.type === 'select'">
                         <select
@@ -92,10 +100,37 @@ const normalizedFields = computed(() => props.fields || []);
                         </select>
                     </template>
 
+                    <template v-else-if="field.type === 'switch'">
+                        <label class="flex cursor-pointer items-center justify-between gap-3">
+                            <span class="text-sm font-medium text-[var(--maya-text-main)]">{{ field.label }}</span>
+                            <input
+                                type="checkbox"
+                                class="sr-only"
+                                :checked="modelValue[field.key] ?? false"
+                                @change="updateField(field.key, $event.target.checked)"
+                            >
+                            <span
+                                class="relative inline-flex h-7 w-14 items-center rounded-full border border-transparent p-1 transition-all duration-300 ease-in-out overflow-hidden"
+                                :class="[
+                                    (modelValue[field.key] ?? false)
+                                        ? 'bg-[var(--maya-primary)]'
+                                        : 'bg-[var(--maya-text-muted)]/35'
+                                ]"
+                            >
+                                <span
+                                    class="absolute top-1 inline-flex h-5 w-5 rounded-full bg-white shadow-md transition-all duration-300 ease-in-out will-change-transform dark:bg-[var(--maya-bg-surface)]"
+                                    :style="{
+                                        left: (modelValue[field.key] ?? false) ? 'calc(100% - 1.25rem)' : '0.25rem'
+                                    }"
+                                />
+                            </span>
+                        </label>
+                    </template>
+
                     <template v-else>
                         <TextInput
                             :model-value="modelValue[field.key]"
-                            :type="field.type || 'text'"
+                            :type="field.isPassword ? 'password' : (field.type || 'text')"
                             class="mt-1 block w-full !bg-[var(--maya-bg-surface)] !text-[var(--maya-text-main)] !border-[var(--maya-border)] placeholder:!text-[var(--maya-text-muted)]"
                             :placeholder="field.placeholder"
                             @update:model-value="updateField(field.key, field.valueType === 'number' ? ($event === '' ? null : Number($event)) : $event)"
