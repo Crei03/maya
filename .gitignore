@@ -6,11 +6,13 @@ test
 boostrap
 .kilocode
 plans
+AGENTS.md
+.atl
 # Laravel 4 specific
 bootstrap/compiled.php
 app/storage/
 package-lock.json
-
+composer.lock
 # Laravel 5 & Lumen specific
 public/storage
 public/hot
