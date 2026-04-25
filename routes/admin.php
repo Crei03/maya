@@ -5,22 +5,24 @@ use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\ColumnPreferenceController;
 use App\Http\Controllers\Admin\ManifestController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\UsersController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 /*
 |--------------------------------------------------------------------------
-| Admin Routes
+| Admin Routes (Tenant-scoped)
 |--------------------------------------------------------------------------
 |
-| Rutas para el panel de administración de MAYA.
-| Por ahora sin autenticación compleja - acceso directo como admin.
-|
-| TODO @future: Agregar middleware de autenticación y autorización
+| These routes are accessible under tenant subdomains ({slug}.maya.app)
+| and require authentication with gestor or messenger roles.
+| All routes enforce tenant isolation via TenantScope.
 |
 */
 
-// Dashboard de KPIs
+Route::middleware(['auth', 'tenant', 'gestor'])
+    ->group(function () {
+        // Dashboard de KPIs
 Route::get('/dashboard', [KPIController::class, 'dashboard'])
     ->name('admin.dashboard');
 
@@ -44,6 +46,9 @@ Route::get('/configuracion', [SettingsController::class, 'index'])
 
 Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
     ->name('admin.configuracion.clientes');
+
+Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
+    ->name('admin.configuracion.usuarios');
 
 // Versión Mobile de Asignación de Transporte
 Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
@@ -90,6 +95,21 @@ Route::prefix('api')->group(function () {
     Route::delete('/clients/{id}', [ClientController::class, 'destroy'])
         ->name('admin.clients.destroy');
 
+    Route::get('/users', [UsersController::class, 'list'])
+        ->name('admin.users.list');
+
+    Route::get('/users/{id}', [UsersController::class, 'show'])
+        ->name('admin.users.show');
+
+    Route::post('/users', [UsersController::class, 'store'])
+        ->name('admin.users.store');
+
+    Route::patch('/users/{id}', [UsersController::class, 'update'])
+        ->name('admin.users.update');
+
+    Route::delete('/users/{id}', [UsersController::class, 'destroy'])
+        ->name('admin.users.destroy');
+
     Route::get('/catalogos/{slug}/valores', [ClientController::class, 'catalogValues'])
         ->name('admin.catalogos.valores');
 
@@ -101,4 +121,5 @@ Route::prefix('api')->group(function () {
 
     Route::put('/column-preferences/{module}', [ColumnPreferenceController::class, 'update'])
         ->name('admin.column-preferences.update');
+});
 });

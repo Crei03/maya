@@ -26,5 +26,5 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 
-// Admin routes
-require __DIR__.'/admin.php';
+// Super Admin routes (root domain only)
+require __DIR__.'/Management.php';

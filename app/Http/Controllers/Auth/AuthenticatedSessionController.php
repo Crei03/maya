@@ -33,7 +33,28 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('admin.dashboard', absolute: false));
+        $user = $request->user();
+
+        // Super admin goes to SaaS dashboard
+        if ($user->isManagement()) {
+            $url = route('Management.dashboard', absolute: false);
+            return redirect()->intended($url);
+        }
+
+        // Single-tenant mode or local development: stay on current domain
+        if (! config('multi-tenant.enabled') || app()->environment('local', 'development')) {
+            $url = route('admin.dashboard', absolute: false);
+            return redirect()->intended($url);
+        }
+
+        // Production multi-tenant: redirect to tenant subdomain
+        if ($user->tenant) {
+            $tenantUrl = 'http://' . $user->tenant->slug . '.' . parse_url(config('app.url'), PHP_URL_HOST) . '/dashboard';
+            return redirect()->intended($tenantUrl);
+        }
+
+        $url = route('admin.dashboard', absolute: false);
+        return redirect()->intended($url);
     }
 
     /**
