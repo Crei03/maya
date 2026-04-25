@@ -8,9 +8,6 @@ use Inertia\Response;
 
 class SettingsController extends Controller
 {
-    /**
-     * Render the admin settings page.
-     */
     public function index(): Response
     {
         return Inertia::render('Admin/Configuracion');
@@ -19,5 +16,10 @@ class SettingsController extends Controller
     public function clients(): Response
     {
         return Inertia::render('Admin/Configuracion/Client');
+    }
+
+    public function users(): Response
+    {
+        return Inertia::render('Admin/Configuracion/Users');
     }
 }
