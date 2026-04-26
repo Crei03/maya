@@ -7,6 +7,7 @@ import Filters from '@/Components/buttons/Filters.vue';
 import ColumnVisibilitySelector from '@/Components/buttons/ColumnVisibilitySelector.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
+import Excel from '@/Components/buttons/Excel.vue';
 
 const columnPreferenceModule = 'admin.clients';
 const activeSection = ref(null);
@@ -232,20 +233,27 @@ const saveColumnPreference = async (nextColumns) => {
     }
 };
 
+/**
+ * Base filter params shared between list and export.
+ */
+const clientFilterParams = () => ({
+    cliente: filters.cliente || undefined,
+    residencia_id: filters.residencia_id || undefined,
+    provincia_id: filters.provincia_id || undefined,
+    distrito_id: filters.distrito_id || undefined,
+    corregimiento_id: filters.corregimiento_id || undefined,
+    calle: filters.calle || undefined,
+    numero: filters.numero || undefined,
+    codigo_postal: filters.codigo_postal || undefined,
+});
+
 const fetchClients = async () => {
     loading.value = true;
 
     try {
         const response = await window.axios.get(route('admin.clients.list'), {
             params: {
-                cliente: filters.cliente || undefined,
-                residencia_id: filters.residencia_id || undefined,
-                provincia_id: filters.provincia_id || undefined,
-                distrito_id: filters.distrito_id || undefined,
-                corregimiento_id: filters.corregimiento_id || undefined,
-                calle: filters.calle || undefined,
-                numero: filters.numero || undefined,
-                codigo_postal: filters.codigo_postal || undefined,
+                ...clientFilterParams(),
                 page: currentPage.value,
                 per_page: perPage.value,
             },
@@ -330,6 +338,17 @@ const createClient = async () => {
     } finally {
         saving.value = false;
     }
+};
+
+const fetchAllClientsForExport = async () => {
+    const response = await window.axios.get(route('admin.clients.list'), {
+        params: {
+            ...clientFilterParams(),
+            per_page: 99999,
+        },
+    });
+
+    return response.data?.data?.data || [];
 };
 
 watch(
@@ -421,6 +440,14 @@ onMounted(async () => {
             </div>
             
             <div class="flex flex-wrap items-center justify-end gap-2">
+                    <Excel
+                        :columns="columns"
+                        :fetch-all-data="fetchAllClientsForExport"
+                        module-name="clientes"
+                        :loading="loading"
+                        variant="success"
+                    />
+                
                 <button
                     type="button"
                     class="inline-flex items-center gap-2 rounded-md border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"

@@ -33,7 +33,7 @@ class FilterClientRequest extends FormRequest
             'calle' => ['nullable', 'string', 'max:120'],
             'numero' => ['nullable', 'string', 'max:40'],
             'codigo_postal' => ['nullable', 'string', 'max:20'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
+            'per_page' => ['nullable', 'integer', 'min:1'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
     }
