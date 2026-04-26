@@ -36,11 +36,13 @@ class UsersService
 
     public function create(array $data): User
     {
+        $role = $data['role'] ?? User::ROLE_GESTOR;
+
         $user = User::query()->create([
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'role' => User::ROLE_USER,
+            'role' => $role,
             'status' => $data['status'] ?? true,
         ]);
 
