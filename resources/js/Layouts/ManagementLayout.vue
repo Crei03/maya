@@ -10,7 +10,8 @@ import {
     faMoon,
     faRightFromBracket,
     faBell,
-    faHouse
+    faHouse,
+    faNewspaper,
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { useTheme } from '@/Composables/useTheme.js';
@@ -26,6 +27,7 @@ const logout = () => {
 const navigation = [
     { name: 'Dashboard', href: route('Management.dashboard'), icon: faHouse, active: route().current('Management.dashboard') },
     { name: 'Paqueterías', href: route('Management.tenants.index'), icon: faBuilding, active: route().current('Management.tenants.*') },
+    { name: 'Blog', href: route('Management.blog.index'), icon: faNewspaper, active: route().current('Management.blog.*') },
     { name: 'Auditoría', href: route('Management.audit-logs.index'), icon: faClipboardList, active: route().current('Management.audit-logs.*') },
 ];
 </script>

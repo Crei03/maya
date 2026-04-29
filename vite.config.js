@@ -17,9 +17,6 @@ export default defineConfig({
                 },
             },
         }),
-        vueJsx({
-            // also transform JSX inside .vue files (default only handles .jsx/.tsx)
-            include: [/\.vue$/, /\.[jt]sx?$/],
-        })    
+        vueJsx()    
     ],
 });

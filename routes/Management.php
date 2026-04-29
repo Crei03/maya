@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Management\AuditLogController;
+use App\Http\Controllers\Management\BlogController;
 use App\Http\Controllers\Management\ManagementDashboardController;
 use App\Http\Controllers\Management\TenantController;
 use Illuminate\Support\Facades\Route;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'Management'])
     ->domain(config('app.url'))
-    ->prefix('super-admin')
+    ->prefix('management')
     ->name('Management.')
     ->group(function () {
         Route::get('/dashboard', [ManagementDashboardController::class, 'index'])
@@ -30,6 +31,19 @@ Route::middleware(['auth', 'Management'])
 
         Route::patch('/tenants/{tenant}/toggle-status', [TenantController::class, 'toggleStatus'])
             ->name('tenants.toggle-status');
+
+        Route::resource('blog', BlogController::class)
+            ->except(['show'])
+            ->parameters(['blog' => 'post']);
+
+        Route::post('/blog/{post}/publish', [BlogController::class, 'publish'])
+            ->name('blog.publish');
+
+        Route::post('/blog/analyze-seo', [BlogController::class, 'analyzeSeo'])
+            ->name('blog.analyze-seo');
+
+        Route::post('/blog/upload-image', [BlogController::class, 'uploadImage'])
+            ->name('blog.upload-image');
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
             ->name('audit-logs.index');
