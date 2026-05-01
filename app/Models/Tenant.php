@@ -53,6 +53,11 @@ class Tenant extends BaseTenant
         return $this->hasMany(Shipment::class, 'tenant_id');
     }
 
+    public function warehouses(): HasMany
+    {
+        return $this->hasMany(Warehouse::class, 'tenant_id');
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';
