@@ -61,6 +61,7 @@ class Shipment extends Model
     protected $fillable = [
         'id',
         'tenant_id',
+        'warehouse_id',
         'tracking_number',
         'sender_id',
         'recipient_name',
@@ -163,6 +164,14 @@ class Shipment extends Model
     public function currentStatus(): BelongsTo
     {
         return $this->belongsTo(CatalogoValor::class, 'current_status_id');
+    }
+
+    /**
+     * Bodega donde se encuentra el paquete.
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
     }
 
     /**
