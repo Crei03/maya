@@ -51,6 +51,11 @@ class User extends Authenticatable
         return $this->hasMany(Manifest::class, 'messenger_id');
     }
 
+    public function shipmentTasks(): HasMany
+    {
+        return $this->hasMany(ShipmentTask::class, 'driver_id');
+    }
+
     public function isManagement(): bool
     {
         return $this->role === self::ROLE_SUPER_ADMIN;

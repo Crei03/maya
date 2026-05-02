@@ -207,11 +207,19 @@ class Shipment extends Model
     }
 
     /**
-     * Items de manifiesto donde aparece este envío.
+     * Items de manifiesto donde aparece este envio.
      */
     public function manifestItems(): HasMany
     {
         return $this->hasMany(ManifestItem::class, 'shipment_id');
+    }
+
+    /**
+     * Items de tareas de envio donde aparece este envio.
+     */
+    public function shipmentTaskItems(): HasMany
+    {
+        return $this->hasMany(ShipmentTaskItem::class, 'shipment_id');
     }
 
     // ============================================================================

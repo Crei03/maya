@@ -11,25 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('service_ratings', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
+        $tables = ['service_ratings', 'incidents', 'pickup_requests', 'audit_logs', 'column_preferences'];
 
-        Schema::table('incidents', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
-
-        Schema::table('pickup_requests', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
-
-        Schema::table('audit_logs', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
-
-        Schema::table('column_preferences', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
+        foreach ($tables as $table) {
+            if (Schema::hasTable($table)) {
+                Schema::table($table, function (Blueprint $table) {
+                    $table->uuid('tenant_id')->nullable()->index()->after('id');
+                });
+            }
+        }
     }
 
     /**
@@ -37,24 +27,14 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('service_ratings', function (Blueprint $table) {
-            $table->dropColumn('tenant_id');
-        });
+        $tables = ['service_ratings', 'incidents', 'pickup_requests', 'audit_logs', 'column_preferences'];
 
-        Schema::table('incidents', function (Blueprint $table) {
-            $table->dropColumn('tenant_id');
-        });
-
-        Schema::table('pickup_requests', function (Blueprint $table) {
-            $table->dropColumn('tenant_id');
-        });
-
-        Schema::table('audit_logs', function (Blueprint $table) {
-            $table->dropColumn('tenant_id');
-        });
-
-        Schema::table('column_preferences', function (Blueprint $table) {
-            $table->dropColumn('tenant_id');
-        });
+        foreach ($tables as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'tenant_id')) {
+                Schema::table($table, function (Blueprint $table) {
+                    $table->dropColumn('tenant_id');
+                });
+            }
+        }
     }
 };
