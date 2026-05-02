@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 return new class extends Migration
@@ -41,7 +42,9 @@ return new class extends Migration
         ];
 
         foreach ($tables as $table) {
-            DB::table($table)->update(['tenant_id' => $demoTenantId]);
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'tenant_id')) {
+                DB::table($table)->update(['tenant_id' => $demoTenantId]);
+            }
         }
     }
 
@@ -58,7 +61,9 @@ return new class extends Migration
         ];
 
         foreach ($tables as $table) {
-            DB::table($table)->update(['tenant_id' => null]);
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'tenant_id')) {
+                DB::table($table)->update(['tenant_id' => null]);
+            }
         }
 
         // Remove Demo tenant

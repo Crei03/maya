@@ -18,9 +18,11 @@ return new class extends Migration
         ];
 
         foreach ($tables as $table) {
-            Schema::table($table, function (Blueprint $table) {
-                $table->uuid('tenant_id')->nullable(false)->change();
-            });
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'tenant_id')) {
+                Schema::table($table, function (Blueprint $table) {
+                    $table->uuid('tenant_id')->nullable(false)->change();
+                });
+            }
         }
     }
 
@@ -36,9 +38,11 @@ return new class extends Migration
         ];
 
         foreach ($tables as $table) {
-            Schema::table($table, function (Blueprint $table) {
-                $table->uuid('tenant_id')->nullable()->change();
-            });
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'tenant_id')) {
+                Schema::table($table, function (Blueprint $table) {
+                    $table->uuid('tenant_id')->nullable()->change();
+                });
+            }
         }
     }
 };

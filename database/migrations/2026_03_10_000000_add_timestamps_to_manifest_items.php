@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('manifest_items', function (Blueprint $table) {
-            $table->timestamps();
-        });
+        if (Schema::hasTable('manifest_items')) {
+            Schema::table('manifest_items', function (Blueprint $table) {
+                $table->timestamps();
+            });
+        }
     }
 
     /**

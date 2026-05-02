@@ -19,9 +19,11 @@ return new class extends Migration
             $table->uuid('tenant_id')->nullable()->index()->after('id');
         });
 
-        Schema::table('shipments', function (Blueprint $table) {
-            $table->uuid('tenant_id')->nullable()->index()->after('id');
-        });
+        if (Schema::hasTable('shipments')) {
+            Schema::table('shipments', function (Blueprint $table) {
+                $table->uuid('tenant_id')->nullable()->index()->after('id');
+            });
+        }
     }
 
     /**
