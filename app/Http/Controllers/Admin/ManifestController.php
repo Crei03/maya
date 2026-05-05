@@ -9,6 +9,7 @@ use App\Models\Manifest;
 use App\Models\ManifestItem;
 use App\Models\Shipment;
 use App\Models\TrackingEvent;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,140 +50,90 @@ class ManifestController extends Controller
     }
 
     /**
-     * Obtiene los paquetes disponibles para asignación.
+     * Obtiene los paquetes disponibles para asignación a despacho.
+     *
+     * Retorna envíos en estado 'pending' o 'in_warehouse' que aún
+     * no han sido asignados a ninguna tarea de reparto.
      *
      * @return array<int, array<string, mixed>>
      */
     private function getPaquetesDisponibles(): array
     {
-        // Por ahora retornamos datos mock
-        // TODO: Implementar lógica real para obtener paquetes sin asignar
-        return [
-            [
-                'id' => 'ship-001',
-                'tracking_number' => 'MAYA001234',
-                'recipient_name' => 'Juan Martínez',
-                'destination_address' => 'Calle 50 #12-34, Ciudad de Panamá',
-                'weight_kg' => 2.5,
-                'total_cost' => 15.00,
-            ],
-            [
-                'id' => 'ship-002',
-                'tracking_number' => 'MAYA001235',
-                'recipient_name' => 'María López',
-                'destination_address' => 'Av. Balboa #45, Ciudad de Panamá',
-                'weight_kg' => 1.8,
-                'total_cost' => 12.50,
-            ],
-            [
-                'id' => 'ship-003',
-                'tracking_number' => 'MAYA001236',
-                'recipient_name' => 'Pedro Sánchez',
-                'destination_address' => 'Carrera 7 #89-12, San Miguelito',
-                'weight_kg' => 3.2,
-                'total_cost' => 18.00,
-            ],
-            [
-                'id' => 'ship-004',
-                'tracking_number' => 'MAYA001237',
-                'recipient_name' => 'Laura Torres',
-                'destination_address' => 'Calle 100 #23-45, Ciudad de Panamá',
-                'weight_kg' => 0.9,
-                'total_cost' => 8.00,
-            ],
-            [
-                'id' => 'ship-005',
-                'tracking_number' => 'MAYA001238',
-                'recipient_name' => 'Carlos Ruiz',
-                'destination_address' => 'Vía España #567, Ciudad de Panamá',
-                'weight_kg' => 4.0,
-                'total_cost' => 22.00,
-            ],
-            [
-                'id' => 'ship-006',
-                'tracking_number' => 'MAYA001239',
-                'recipient_name' => 'Ana Morales',
-                'destination_address' => 'Calle 12 #8-90, Colón',
-                'weight_kg' => 2.1,
-                'total_cost' => 25.00,
-            ],
-        ];
+        return Shipment::availableForDispatch()
+            ->whereNull('assigned_task_id')
+            ->with(['warehouse:id,name,code'])
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(fn (Shipment $shipment) => [
+                'id'                  => $shipment->id,
+                'tracking_number'     => $shipment->tracking_number,
+                'recipient_name'      => $shipment->recipient_name,
+                'recipient_phone'     => $shipment->recipient_phone,
+                'destination_address' => $shipment->destination_address,
+                'weight_kg'           => $shipment->weight_kg,
+                'weight_lb'           => $shipment->weight_lb,
+                'package_type'        => $shipment->package_type,
+                'total_cost'          => $shipment->total_cost,
+                'status'              => $shipment->status,
+                'status_label'        => $shipment->getStatusLabel(),
+                'warehouse'           => $shipment->warehouse
+                    ? ['id' => $shipment->warehouse->id, 'name' => $shipment->warehouse->name]
+                    : null,
+                'created_at'          => $shipment->created_at,
+            ])
+            ->toArray();
     }
 
     /**
      * Obtiene los mensajeros activos disponibles.
      *
+     * Retorna usuarios con rol 'messenger' que estén activos
+     * e incluye el conteo de paquetes asignados hoy.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function getMensajerosActivos(): array
     {
-        // Por ahora retornamos datos mock
-        // TODO: Implementar lógica real para obtener mensajeros de la base de datos
-        return [
-            [
-                'id' => 'msg-001',
-                'full_name' => 'Carlos Méndez',
-                'phone' => '6123-4567',
-                'vehicle_id' => 'MOTO-001',
-                'activo' => true,
-                'paquetes_asignados_hoy' => 12,
-            ],
-            [
-                'id' => 'msg-002',
-                'full_name' => 'María González',
-                'phone' => '6234-5678',
-                'vehicle_id' => 'MOTO-002',
-                'activo' => true,
-                'paquetes_asignados_hoy' => 8,
-            ],
-            [
-                'id' => 'msg-003',
-                'full_name' => 'Juan Pérez',
-                'phone' => '6345-6789',
-                'vehicle_id' => 'CAR-001',
-                'activo' => true,
-                'paquetes_asignados_hoy' => 15,
-            ],
-            [
-                'id' => 'msg-004',
-                'full_name' => 'Ana Rodríguez',
-                'phone' => '6456-7890',
-                'vehicle_id' => 'MOTO-003',
-                'activo' => false,
-                'paquetes_asignados_hoy' => 0,
-            ],
-        ];
+        return User::where('role', 'messenger')
+            ->where('status', 'active')
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(fn (User $user) => [
+                'id'                     => $user->id,
+                'full_name'              => $user->name,
+                'email'                  => $user->email,
+                'paquetes_asignados_hoy' => Shipment::where('assigned_task_id', '!=', null)
+                    ->whereHas('assignedTask', fn ($q) => $q
+                        ->where('driver_id', $user->id)
+                        ->whereDate('start_date', today())
+                    )
+                    ->count(),
+            ])
+            ->toArray();
     }
 
     /**
-     * Obtiene los manifiestos creados hoy.
+     * Obtiene los manifiestos creados hoy con sus relaciones.
      *
      * @return array<int, array<string, mixed>>
      */
     private function getManifiestosHoy(): array
     {
-        // Por ahora retornamos datos mock
-        // TODO: Implementar lógica real para obtener manifiestos del día
-        return [
-            [
-                'id' => 'man-001',
-                'messenger' => [
-                    'full_name' => 'Carlos Méndez',
-                ],
-                'total_items' => 12,
-                'status' => 'En ruta',
-                'created_at' => '2026-03-13 08:30:00',
-            ],
-            [
-                'id' => 'man-002',
-                'messenger' => [
-                    'full_name' => 'María González',
-                ],
-                'total_items' => 8,
-                'status' => 'Preparando',
-                'created_at' => '2026-03-13 09:15:00',
-            ],
-        ];
+        return Manifest::with(['messenger:id,name', 'status'])
+            ->withCount('items')
+            ->whereDate('created_at', today())
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(fn (Manifest $manifest) => [
+                'id'          => $manifest->id,
+                'messenger'   => $manifest->messenger
+                    ? ['id' => $manifest->messenger->id, 'full_name' => $manifest->messenger->name]
+                    : null,
+                'total_items' => $manifest->items_count,
+                'status'      => $manifest->status?->valor ?? 'Preparando',
+                'created_at'  => $manifest->created_at,
+            ])
+            ->toArray();
     }
 
     /**
