@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ColumnPreferenceController;
 use App\Http\Controllers\Admin\ManifestController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UsersController;
+use App\Http\Controllers\Admin\VehicleController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -49,6 +50,9 @@ Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
 
 Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
     ->name('admin.configuracion.usuarios');
+
+Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
+    ->name('admin.configuracion.transportes');
 
 // Versión Mobile de Asignación de Transporte
 Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
@@ -121,5 +125,17 @@ Route::prefix('api')->group(function () {
 
     Route::put('/column-preferences/{module}', [ColumnPreferenceController::class, 'update'])
         ->name('admin.column-preferences.update');
+
+    // Vehículos / Transportes
+    Route::get('/vehicles', [VehicleController::class, 'list'])
+        ->name('admin.vehicles.list');
+    Route::post('/vehicles', [VehicleController::class, 'store'])
+        ->name('admin.vehicles.store');
+    Route::get('/vehicles/{vehicle}', [VehicleController::class, 'show'])
+        ->name('admin.vehicles.show');
+    Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update'])
+        ->name('admin.vehicles.update');
+    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
+        ->name('admin.vehicles.destroy');
 });
 });
