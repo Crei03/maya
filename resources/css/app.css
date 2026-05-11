@@ -75,6 +75,38 @@
 }
 
 /* =========================================
+   ESTILOS PERSONALIZADOS - SELECT Y OPTIONS
+   =========================================
+   Los elementos <option> nativos tienen soporte
+   limitado de CSS. No soportan border, border-radius,
+   ni margin. Lo que sí funciona:
+   - background-color  ✓ (todos los navegadores)
+   - color             ✓ (todos los navegadores)
+   - :hover            ⚠️ (Chrome, Firefox; no Safari)
+   - :checked          ✓ (todos los navegadores)
+   ========================================= */
+
+select option {
+  font-family: inherit;
+  font-size: inherit;
+  background-color: var(--maya-bg-surface);
+  color: var(--maya-text-main);
+}
+
+select option:hover {
+  background-color: var(--maya-hover-surface);
+}
+
+select option:checked {
+  background-color: var(--maya-primary);
+  color: #ffffff;
+}
+
+select option:disabled {
+  color: var(--maya-text-muted);
+}
+
+/* =========================================
    EJEMPLO DE APLICACIÓN EN ELEMENTOS HTML
    ========================================= */
 body {

@@ -97,7 +97,7 @@ const formatDate = (date) => {
                     </div>
                     <select
                         v-model="status"
-                        class="block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        class="block w-48 pl-3 pr-10 py-2 text-base border-[var(--maya-border)] focus:outline-none focus:ring-[var(--maya-primary)] focus:border-[var(--maya-primary)] sm:text-sm rounded-md bg-[var(--maya-bg-surface)] text-[var(--maya-text-main)]"
                     >
                         <option value="">Todos los estados</option>
                         <option value="published">Publicados</option>
