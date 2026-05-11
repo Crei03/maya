@@ -11,13 +11,13 @@ import ModalForm from '@/Components/ModalForm.vue';
 const activeSectionTitle = 'Conductores';
 
 const columns = [
-    { key: 'name',              label: 'Nombre'           },
-    { key: 'email',             label: 'Correo'           },
-    { key: 'phone',             label: 'Teléfono'         },
-    { key: 'license_number',    label: 'Licencia'         },
-    { key: 'is_available',      label: 'Disponibilidad'   },
-    { key: 'active_tasks_count', label: 'Tareas activas'  },
-    { key: 'actions',           label: 'Acciones'         },
+    { key: 'name',            label: 'Nombre'           },
+    { key: 'email',           label: 'Correo'           },
+    { key: 'phone',           label: 'Teléfono'         },
+    { key: 'license_number',  label: 'Licencia'         },
+    { key: 'is_available',    label: 'Disponibilidad'   },
+    { key: 'status',          label: 'Activo'           },
+    { key: 'actions',         label: 'Acciones'         },
 ];
 
 const defaultVisibleColumns = columns.map((c) => c.key);
@@ -32,6 +32,7 @@ const successMessage = ref('');
 const filters = reactive({
     search:       '',
     is_available: '',
+    status:       '',
 });
 
 const modalOpen = ref(false);
@@ -42,6 +43,8 @@ const showFilters = ref(false);
 const currentPage = ref(1);
 const perPage     = ref(15);
 const confirmDeleteId = ref(null);
+const tenantUsers = ref([]);
+const loadingUsers = ref(false);
 
 const driverToDelete = computed(() => {
     if (!confirmDeleteId.value) return null;
@@ -49,10 +52,8 @@ const driverToDelete = computed(() => {
 });
 
 const form = reactive({
-    name:              '',
-    email:             '',
+    user_id:           '',
     phone:             '',
-    password:          '',
     license_number:    '',
     license_expiry:    '',
     emergency_contact: '',
@@ -66,36 +67,37 @@ const filterFields = [
     {
         key: 'is_available', type: 'select', placeholder: 'Todos',
         options: [
-            { id: '',     valor: 'Todos'       },
             { id: '1',    valor: 'Disponible'  },
             { id: '0',    valor: 'Ocupado'     },
+        ],
+    },
+    {
+        key: 'status', type: 'select', placeholder: 'Todos',
+        options: [
+            { id: '1',    valor: 'Activo'     },
+            { id: '0',    valor: 'Inactivo'   },
         ],
     },
 ];
 
 const driverFormFields = computed(() => [
-    { key: 'name',       label: 'Nombre',                   type: 'text',  placeholder: 'Nombre completo'                     },
-    { key: 'email',      label: 'Correo',                   type: 'text',  placeholder: 'correo@ejemplo.com'                 },
-    { key: 'phone',      label: 'Teléfono',                 type: 'text',  placeholder: 'Opcional'                             },
-    {
-        key: 'password',
-        label: editingId.value ? 'Nueva contraseña (opcional)' : 'Contraseña',
-        type: 'text',
-        placeholder: editingId.value ? 'Dejar vacío para mantener' : 'Mínimo 8 caracteres',
-        isPassword: true,
-    },
-    { key: 'license_number',    label: 'No. Licencia',      type: 'text',  placeholder: 'Opcional'                             },
-    { key: 'license_expiry',    label: 'Venc. Licencia',    type: 'date',  placeholder: ''                                     },
-    { key: 'emergency_contact', label: 'Contacto emergencia', type: 'text', placeholder: 'Nombre del contacto'                  },
-    { key: 'emergency_phone',   label: 'Tel. emergencia',   type: 'text',  placeholder: 'Opcional'                             },
-    { key: 'is_available',      label: 'Disponible',        type: 'switch'                                                      },
-    { key: 'status',            label: 'Activo',            type: 'switch'                                                      },
+    ...(!editingId.value
+        ? [{
+            key: 'user_id',
+            label: 'Usuario',
+            type: 'select',
+            placeholder: 'Seleccionar usuario',
+            options: tenantUsers.value.map(u => ({ id: u.id, valor: `${u.name} (${u.email})` })),
+        }]
+        : []),
+    { key: 'phone',             label: 'Teléfono',                 type: 'text',  placeholder: 'Opcional'                             },
+    { key: 'license_number',    label: 'No. Licencia',            type: 'text',  placeholder: 'Opcional'                             },
+    { key: 'license_expiry',    label: 'Venc. Licencia (opcional)', type: 'date'                                                      },
+    { key: 'emergency_contact', label: 'Contacto emergencia (opcional)', type: 'text', placeholder: 'Nombre del contacto'           },
+    { key: 'emergency_phone',   label: 'Tel. emergencia (opcional)', type: 'text',  placeholder: 'Opcional'                          },
+    { key: 'is_available',      label: 'Disponible',              type: 'switch'                                                      },
+    { key: 'status',            label: 'Activo',                  type: 'switch'                                                      },
 ]);
-
-const toolbarSubtitle = computed(() => {
-    if (!pagination.value) return 'Sin datos cargados';
-    return `Mostrando ${pagination.value.from || 0}-${pagination.value.to || 0} de ${pagination.value.total || 0} conductores`;
-});
 
 const backToSections = () => {
     router.get(route('admin.configuracion'));
@@ -103,10 +105,8 @@ const backToSections = () => {
 
 const resetForm = () => {
     Object.assign(form, {
-        name:              '',
-        email:             '',
+        user_id:           '',
         phone:             '',
-        password:          '',
         license_number:    '',
         license_expiry:    '',
         emergency_contact: '',
@@ -118,9 +118,10 @@ const resetForm = () => {
     editingId.value = null;
 };
 
-const openModal = () => {
+const openModal = async () => {
     successMessage.value = '';
     resetForm();
+    await fetchTenantUsers();
     modalOpen.value = true;
 };
 
@@ -132,10 +133,8 @@ const openEditModal = (driver) => {
     successMessage.value = '';
     editingId.value      = driver.id;
     Object.assign(form, {
-        name:              driver.name,
-        email:             driver.email,
+        user_id:           driver.id,
         phone:             driver.phone ?? '',
-        password:          '',
         license_number:    driver.license_number ?? '',
         license_expiry:    driver.license_expiry ?? '',
         emergency_contact: driver.emergency_contact ?? '',
@@ -154,6 +153,7 @@ const fetchDrivers = async () => {
             params: {
                 search:       filters.search       || undefined,
                 is_available: filters.is_available || undefined,
+                status:       filters.status       || undefined,
                 page:         currentPage.value,
                 per_page:     perPage.value,
             },
@@ -170,13 +170,25 @@ const fetchDrivers = async () => {
     }
 };
 
+const fetchTenantUsers = async () => {
+    loadingUsers.value = true;
+    try {
+        const response = await window.axios.get(route('admin.users.all'));
+        tenantUsers.value = response.data?.data || [];
+    } catch {
+        tenantUsers.value = [];
+    } finally {
+        loadingUsers.value = false;
+    }
+};
+
 const applyFilters = async () => {
     currentPage.value = 1;
     await fetchDrivers();
 };
 
 const clearFilters = async () => {
-    Object.assign(filters, { search: '', is_available: '' });
+    Object.assign(filters, { search: '', is_available: '', status: '' });
     currentPage.value = 1;
     await fetchDrivers();
 };
@@ -286,7 +298,6 @@ onMounted(async () => {
 
                 <!-- Toolbar -->
                 <div class="flex flex-wrap items-center justify-end gap-2">
-                    <p class="mr-auto text-xs text-[var(--maya-text-muted)]">{{ toolbarSubtitle }}</p>
 
                     <button
                         type="button"
@@ -339,27 +350,37 @@ onMounted(async () => {
                     <template #cell-is_available="{ row }">
                         <span
                             class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
-                            :class="row.is_available
+                            :class="{
+                                'bg-[var(--maya-success-alpha)] text-[var(--maya-success-dark)]': row.status && row.is_available,
+                                'bg-[var(--maya-danger-alpha)] text-[var(--maya-danger-dark)]': row.status && !row.is_available,
+                                'bg-gray-100 text-gray-500': !row.status
+                            }"
+                        >
+                            <span
+                                class="h-1.5 w-1.5 rounded-full"
+                                :class="{
+                                    'bg-[var(--maya-success)]': row.status && row.is_available,
+                                    'bg-[var(--maya-danger)]': row.status && !row.is_available,
+                                    'bg-gray-400': !row.status
+                                }"
+                            />
+                            {{ !row.status ? 'Indisponible' : (row.is_available ? 'Disponible' : 'Ocupado') }}
+                        </span>
+                    </template>
+
+                    <!-- Activo / Inactivo -->
+                    <template #cell-status="{ row }">
+                        <span
+                            class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                            :class="row.status
                                 ? 'bg-[var(--maya-success-alpha)] text-[var(--maya-success-dark)]'
                                 : 'bg-[var(--maya-danger-alpha)] text-[var(--maya-danger-dark)]'"
                         >
                             <span
                                 class="h-1.5 w-1.5 rounded-full"
-                                :class="row.is_available ? 'bg-[var(--maya-success)]' : 'bg-[var(--maya-danger)]'"
+                                :class="row.status ? 'bg-[var(--maya-success)]' : 'bg-[var(--maya-danger)]'"
                             />
-                            {{ row.is_available ? 'Disponible' : 'Ocupado' }}
-                        </span>
-                    </template>
-
-                    <!-- Tareas activas -->
-                    <template #cell-active_tasks_count="{ row }">
-                        <span
-                            class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                            :class="row.active_tasks_count > 0
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-gray-100 text-gray-500'"
-                        >
-                            {{ row.active_tasks_count ?? 0 }}
+                            {{ row.status ? 'Activo' : 'Inactivo' }}
                         </span>
                     </template>
 
@@ -414,7 +435,7 @@ onMounted(async () => {
             :errors="errors"
             :loading="saving"
             :submit-label="editingId ? 'Actualizar conductor' : 'Guardar conductor'"
-            :columns="2"
+            :columns="1"
             @update:model-value="Object.assign(form, $event)"
             @close="closeModal"
             @submit="editingId ? updateDriver() : createDriver()"

@@ -7,14 +7,17 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Multitenancy\Models\Tenant;
 
 class UsersService
 {
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $search = trim((string) ($filters['search'] ?? ''));
+        $tenant = Tenant::current();
 
         $query = User::query()
+            ->where('tenant_id', $tenant?->id)
             ->when(
                 $search !== '',
                 function ($builder) use ($search) {
@@ -41,7 +44,6 @@ class UsersService
         $user = User::query()->create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'phone' => $data['phone'] ?? null,
             'password' => Hash::make($data['password']),
             'role' => $role,
             'status' => $data['status'] ?? true,
@@ -57,7 +59,6 @@ class UsersService
         $fillData = [
             'name' => $data['name'],
             'email' => $data['email'],
-            'phone' => $data['phone'] ?? null,
             'status' => $data['status'],
         ];
 
@@ -84,10 +85,22 @@ class UsersService
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'phone' => $user->phone,
             'role' => $user->role,
             'status' => $user->status,
             'created_at' => $user->created_at?->toISOString(),
         ];
+    }
+
+    public function listAll(): array
+    {
+        $tenant = Tenant::current();
+
+        return User::query()
+            ->where('tenant_id', $tenant?->id)
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => $this->mapUser($user))
+            ->values()
+            ->toArray();
     }
 }

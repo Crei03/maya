@@ -37,6 +37,7 @@ class DriverProfile extends Model
     protected $fillable = [
         'id',
         'user_id',
+        'phone',
         'license_number',
         'license_expiry',
         'emergency_contact',
@@ -47,6 +48,7 @@ class DriverProfile extends Model
     protected function casts(): array
     {
         return [
+            'phone'          => 'string',
             'license_expiry' => 'date',
             'is_available'   => 'boolean',
             'created_at'     => 'datetime',

@@ -26,6 +26,7 @@ const columns = [
     { key: 'email', label: 'Correo' },
     { key: 'status', label: 'Estado' },
     { key: 'created_at', label: 'Fecha de creación' },
+    { key: 'actions', label: 'Acciones' },
 ];
 
 const defaultVisibleColumns = columns.map((column) => column.key);
@@ -331,6 +332,27 @@ onMounted(async () => {
                         <span class="text-sm text-[var(--maya-text-main)]">
                             {{ formatDateOnly(row.created_at) }}
                         </span>
+                    </template>
+
+                    <template #cell-actions="{ row }">
+                        <div class="flex items-center gap-2">
+                            <button
+                                type="button"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--maya-border)] text-[var(--maya-text-muted)] hover:border-[var(--maya-primary)] hover:text-[var(--maya-primary)] transition-colors"
+                                title="Editar"
+                                @click="openEditModal(row)"
+                            >
+                                <font-awesome-icon :icon="['fas', 'pencil']" class="text-xs" />
+                            </button>
+                            <button
+                                type="button"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--maya-border)] text-[var(--maya-text-muted)] hover:border-[var(--maya-danger)] hover:text-[var(--maya-danger)] transition-colors"
+                                title="Eliminar"
+                                @click="deleteUser(row.id)"
+                            >
+                                <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
+                            </button>
+                        </div>
                     </template>
                 </DataTable>
             </section>

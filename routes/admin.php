@@ -103,6 +103,9 @@ Route::prefix('api')->group(function () {
     Route::delete('/clients/{id}', [ClientController::class, 'destroy'])
         ->name('admin.clients.destroy');
 
+    Route::get('/users/all', [UsersController::class, 'listAll'])
+        ->name('admin.users.all');
+
     Route::get('/users', [UsersController::class, 'list'])
         ->name('admin.users.list');
 

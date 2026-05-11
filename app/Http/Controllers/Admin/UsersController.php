@@ -23,6 +23,16 @@ class UsersController extends Controller
         return Inertia::render('Admin/Configuracion/Users');
     }
 
+    public function listAll(): JsonResponse
+    {
+        $users = $this->usersService->listAll();
+
+        return response()->json([
+            'success' => true,
+            'data' => $users,
+        ]);
+    }
+
     public function list(FilterUserRequest $request): JsonResponse
     {
         $validated = $request->validated();

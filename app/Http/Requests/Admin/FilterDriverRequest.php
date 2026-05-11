@@ -18,6 +18,7 @@ class FilterDriverRequest extends FormRequest
         return [
             'search'       => ['nullable', 'string'],
             'is_available' => ['nullable', 'string', 'in:0,1,true,false'],
+            'status'       => ['nullable', 'string', 'in:0,1,true,false'],
             'per_page'     => ['nullable', 'integer'],
         ];
     }

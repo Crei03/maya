@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Multitenancy\Models\Tenant;
 
 class DriverService
 {
@@ -22,6 +23,8 @@ class DriverService
 
         $query = User::query()
             ->where('role', User::ROLE_MESSENGER)
+            ->whereHas('driverProfile') // Only users that actually have a driver profile
+            ->where('tenant_id', Tenant::current()?->id)
             ->with('driverProfile')
             ->withCount([
                 'shipmentTasks as active_tasks_count' => function ($q) {
@@ -44,6 +47,13 @@ class DriverService
                     $builder->whereHas('driverProfile', function ($q) use ($available) {
                         $q->where('is_available', $available);
                     });
+                }
+            )
+            ->when(
+                isset($filters['status']),
+                function ($builder) use ($filters) {
+                    $status = filter_var($filters['status'], FILTER_VALIDATE_BOOLEAN);
+                    $builder->where('status', $status);
                 }
             )
             ->orderByDesc('created_at');
@@ -73,23 +83,32 @@ class DriverService
     public function create(array $data): User
     {
         return DB::transaction(function () use ($data) {
-            $user = User::query()->create([
-                'name'     => $data['name'],
-                'email'    => $data['email'],
-                'phone'    => $data['phone'] ?? null,
-                'password' => Hash::make($data['password']),
-                'role'     => User::ROLE_MESSENGER,
-                'status'   => $data['status'] ?? true,
-            ]);
+            $user = User::query()->findOrFail($data['user_id']);
 
-            DriverProfile::query()->create([
-                'user_id'          => $user->id,
-                'license_number'   => $data['license_number'] ?? null,
-                'license_expiry'   => $data['license_expiry'] ?? null,
+            // Set role to messenger
+            $user->role = User::ROLE_MESSENGER;
+            $user->save();
+
+            // Create or update driver profile
+            $profile = $user->driverProfile;
+            $profileData = [
+                'phone'             => $data['phone'] ?? null,
+                'license_number'    => $data['license_number'] ?? null,
+                'license_expiry'    => $data['license_expiry'] ?? null,
                 'emergency_contact' => $data['emergency_contact'] ?? null,
-                'emergency_phone'  => $data['emergency_phone'] ?? null,
-                'is_available'     => $data['is_available'] ?? true,
-            ]);
+                'emergency_phone'   => $data['emergency_phone'] ?? null,
+                'is_available'      => $data['is_available'] ?? true,
+            ];
+
+            if ($profile) {
+                $profile->fill($profileData);
+                $profile->save();
+            } else {
+                DriverProfile::query()->create(array_merge(
+                    ['user_id' => $user->id],
+                    $profileData
+                ));
+            }
 
             return $this->find($user->id);
         });
@@ -103,21 +122,15 @@ class DriverService
         return DB::transaction(function () use ($id, $data) {
             $user = $this->find($id);
 
-            $user->fill([
-                'name'   => $data['name'],
-                'email'  => $data['email'],
-                'phone'  => $data['phone'] ?? null,
-                'status' => $data['status'],
-            ]);
-
-            if (! empty($data['password'])) {
-                $user->password = Hash::make($data['password']);
+            // Update only status on the user
+            if (array_key_exists('status', $data)) {
+                $user->status = $data['status'];
+                $user->save();
             }
 
-            $user->save();
-
+            // Update profile fields
             $profileData = [];
-            $profileFields = ['license_number', 'license_expiry', 'emergency_contact', 'emergency_phone', 'is_available'];
+            $profileFields = ['phone', 'license_number', 'license_expiry', 'emergency_contact', 'emergency_phone', 'is_available'];
 
             foreach ($profileFields as $field) {
                 if (array_key_exists($field, $data)) {
@@ -166,7 +179,7 @@ class DriverService
             'id'                  => $user->id,
             'name'                => $user->name,
             'email'               => $user->email,
-            'phone'               => $user->phone,
+            'phone'               => $profile?->phone,
             'role'                => $user->role,
             'status'              => $user->status,
             'license_number'      => $profile?->license_number,
