@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Management\AuditLogController;
 use App\Http\Controllers\Management\BlogController;
+use App\Http\Controllers\Management\CatalogoController;
 use App\Http\Controllers\Management\ManagementDashboardController;
 use App\Http\Controllers\Management\TenantController;
 use Illuminate\Support\Facades\Route;
@@ -47,4 +48,13 @@ Route::middleware(['auth', 'Management'])
 
         Route::get('/audit-logs', [AuditLogController::class, 'index'])
             ->name('audit-logs.index');
+
+        Route::resource('catalogos', CatalogoController::class);
+
+        Route::post('/catalogos/{catalogo}/valores', [CatalogoController::class, 'storeValor'])
+            ->name('catalogos.valores.store');
+        Route::put('/catalogos/{catalogo}/valores/{valor}', [CatalogoController::class, 'updateValor'])
+            ->name('catalogos.valores.update');
+        Route::delete('/catalogos/{catalogo}/valores/{valor}', [CatalogoController::class, 'destroyValor'])
+            ->name('catalogos.valores.destroy');
     });

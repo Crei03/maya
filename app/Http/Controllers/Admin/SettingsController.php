@@ -27,4 +27,9 @@ class SettingsController extends Controller
     {
         return Inertia::render('Admin/Configuracion/Conductores');
     }
+
+    public function catalogos(): Response
+    {
+        return Inertia::render('Admin/Configuracion/Catalogos');
+    }
 }

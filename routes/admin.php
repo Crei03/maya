@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\CatalogoController;
 use App\Http\Controllers\Admin\DriverController;
 use App\Http\Controllers\Admin\KPIController;
 use App\Http\Controllers\Admin\ClientController;
@@ -57,6 +58,17 @@ Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
 
 Route::get('/configuracion/conductores', [SettingsController::class, 'drivers'])
     ->name('admin.configuracion.conductores');
+
+Route::get('/configuracion/catalogos', [SettingsController::class, 'catalogos'])
+    ->name('admin.configuracion.catalogos');
+
+Route::prefix('api/catalogos')->name('admin.configuracion.catalogos.')->group(function () {
+    Route::get('/', [CatalogoController::class, 'index'])->name('index');
+    Route::get('{slug}', [CatalogoController::class, 'show'])->name('show');
+    Route::post('valores', [CatalogoController::class, 'store'])->name('valores.store');
+    Route::put('valores/{id}', [CatalogoController::class, 'update'])->name('valores.update');
+    Route::delete('valores/{id}', [CatalogoController::class, 'destroy'])->name('valores.destroy');
+});
 
 // Versión Mobile de Asignación de Transporte
 Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
