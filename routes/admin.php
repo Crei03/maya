@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\DriverController;
 use App\Http\Controllers\Admin\KPIController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\ColumnPreferenceController;
@@ -53,6 +54,9 @@ Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
 
 Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
     ->name('admin.configuracion.transportes');
+
+Route::get('/configuracion/conductores', [SettingsController::class, 'drivers'])
+    ->name('admin.configuracion.conductores');
 
 // Versión Mobile de Asignación de Transporte
 Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
@@ -137,5 +141,17 @@ Route::prefix('api')->group(function () {
         ->name('admin.vehicles.update');
     Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
         ->name('admin.vehicles.destroy');
+
+    // Conductores
+    Route::get('/drivers', [DriverController::class, 'list'])
+        ->name('admin.drivers.list');
+    Route::post('/drivers', [DriverController::class, 'store'])
+        ->name('admin.drivers.store');
+    Route::get('/drivers/{driver}', [DriverController::class, 'show'])
+        ->name('admin.drivers.show');
+    Route::patch('/drivers/{driver}', [DriverController::class, 'update'])
+        ->name('admin.drivers.update');
+    Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])
+        ->name('admin.drivers.destroy');
 });
 });

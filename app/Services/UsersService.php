@@ -41,6 +41,7 @@ class UsersService
         $user = User::query()->create([
             'name' => $data['name'],
             'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
             'password' => Hash::make($data['password']),
             'role' => $role,
             'status' => $data['status'] ?? true,
@@ -56,6 +57,7 @@ class UsersService
         $fillData = [
             'name' => $data['name'],
             'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
             'status' => $data['status'],
         ];
 
@@ -82,6 +84,7 @@ class UsersService
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $user->phone,
             'role' => $user->role,
             'status' => $user->status,
             'created_at' => $user->created_at?->toISOString(),
