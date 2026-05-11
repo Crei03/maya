@@ -60,7 +60,6 @@ const filterFields = [
     {
         key: 'type', type: 'select', placeholder: 'Todos los tipos',
         options: [
-            { id: '',         valor: 'Todos los tipos' },
             { id: 'internal', valor: 'Interno'         },
             { id: 'external', valor: 'Externo'         },
         ],
@@ -80,16 +79,12 @@ const vehicleFormFields = computed(() => [
     { key: 'model',           label: 'Modelo',                type: 'text',   placeholder: 'Ej: Hiace'   },
     { key: 'year',            label: 'Año',                   type: 'number', placeholder: '2024'        },
     { key: 'capacity_kg',     label: 'Capacidad (kg)',         type: 'number', placeholder: 'Opcional'    },
-    { key: 'capacity_volume', label: 'Capacidad volumétrica',  type: 'text',   placeholder: 'Opcional'    },
+    { key: 'capacity_volume', label: 'Capacidad volumétrica',  type: 'number',   placeholder: 'Opcional'    },
     { key: 'color',           label: 'Color',                 type: 'text',   placeholder: 'Opcional'    },
-    { key: 'is_active',       label: 'Activo',                type: 'switch'                              },
     { key: 'notes',           label: 'Notas',                 type: 'text',   placeholder: 'Opcional'    },
+    { key: 'is_active',       label: 'Activo',                type: 'switch'                              },
 ]);
 
-const toolbarSubtitle = computed(() => {
-    if (!pagination.value) return 'Sin datos cargados';
-    return `Mostrando ${pagination.value.from || 0}-${pagination.value.to || 0} de ${pagination.value.total || 0} vehículos`;
-});
 
 const backToSections = () => {
     router.get(route('admin.configuracion'));
@@ -269,7 +264,6 @@ onMounted(async () => {
 
                 <!-- Toolbar -->
                 <div class="flex flex-wrap items-center justify-end gap-2">
-                    <p class="mr-auto text-xs text-[var(--maya-text-muted)]">{{ toolbarSubtitle }}</p>
 
                     <button
                         type="button"
@@ -382,7 +376,7 @@ onMounted(async () => {
             :errors="errors"
             :loading="saving"
             :submit-label="editingId ? 'Actualizar vehículo' : 'Guardar vehículo'"
-            :columns="2"
+            :columns="1"
             @update:model-value="Object.assign(form, $event)"
             @close="closeModal"
             @submit="editingId ? updateVehicle() : createVehicle()"
