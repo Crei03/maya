@@ -114,7 +114,7 @@ const gridClass = computed(() => {
                                 :class="[
                                     (modelValue[field.key] ?? false)
                                         ? 'bg-[var(--maya-primary)]'
-                                        : 'bg-[var(--maya-text-muted)]/35'
+                                        : 'bg-slate-600'
                                 ]"
                             >
                                 <span
@@ -131,7 +131,7 @@ const gridClass = computed(() => {
                         <TextInput
                             :model-value="modelValue[field.key]"
                             :type="field.isPassword ? 'password' : (field.type || 'text')"
-                            class="mt-1 block w-full !bg-[var(--maya-bg-surface)] !text-[var(--maya-text-main)] !border-[var(--maya-border)] placeholder:!text-[var(--maya-text-muted)]"
+                            class="mt-1 block w-full !bg-[var(--maya-bg-surface)] !text-[var(--maya-text-main)] !border-[var(--maya-border)] placeholder:!text-[var(--maya-text-muted)] placeholder:!opacity-40"
                             :placeholder="field.placeholder"
                             @update:model-value="updateField(field.key, field.valueType === 'number' ? ($event === '' ? null : Number($event)) : $event)"
                         />

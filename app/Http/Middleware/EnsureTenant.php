@@ -7,7 +7,10 @@ namespace App\Http\Middleware;
 use App\TenantFinder\DomainTenantFinder;
 use Closure;
 use Illuminate\Http\Request;
-use Spatie\Multitenancy\Models\Tenant;
+// Must use App\Models\Tenant so the container holds an App\Models\Tenant instance.
+// Spatie::current() returns ?static — if a base Spatie\Tenant is stored instead,
+// PHP strict return-types throw a TypeError when retrieving from App\Models\Tenant::current().
+use App\Models\Tenant;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenant

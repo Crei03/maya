@@ -13,7 +13,7 @@ const perPage = ref(15);
 const sections = [
     { key: 'clientes', label: 'Clientes', icon: ['fas', 'user'], route: route('admin.configuracion.clientes') },
     { key: 'usuarios', label: 'Usuarios', icon: ['fas', 'users'], route: route('admin.configuracion.usuarios') },
-    { key: 'transporte', label: 'Transporte', icon: ['fas', 'truck'] },
+    { key: 'transporte', label: 'Transporte', icon: ['fas', 'truck'], route: route('admin.configuracion.transportes') },
     { key: 'conductor', label: 'Conductor', icon: ['fas', 'id-card'] },
     { key: 'roles', label: 'Roles', icon: ['fas', 'shield-alt'] },
 ];
