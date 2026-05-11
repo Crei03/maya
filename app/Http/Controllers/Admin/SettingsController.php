@@ -22,4 +22,9 @@ class SettingsController extends Controller
     {
         return Inertia::render('Admin/Configuracion/Users');
     }
+
+    public function drivers(): Response
+    {
+        return Inertia::render('Admin/Configuracion/Conductores');
+    }
 }
