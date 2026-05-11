@@ -9,6 +9,8 @@ plans
 AGENTS.md
 .atl
 # Laravel 4 specific
+.agents
+skills-lock.json
 bootstrap/compiled.php
 app/storage/
 package-lock.json
