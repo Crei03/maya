@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\ColumnPreferenceController;
 use App\Http\Controllers\Admin\ManifestController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\Admin\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -168,5 +169,17 @@ Route::prefix('api')->group(function () {
         ->name('admin.drivers.update');
     Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])
         ->name('admin.drivers.destroy');
+
+    // Envíos / Shipments
+    Route::get('/shipments', [ShipmentController::class, 'list'])
+        ->name('admin.shipments.list');
+    Route::get('/shipments/{id}', [ShipmentController::class, 'show'])
+        ->name('admin.shipments.show');
+    Route::post('/shipments', [ShipmentController::class, 'store'])
+        ->name('admin.shipments.store');
+    Route::patch('/shipments/{id}', [ShipmentController::class, 'update'])
+        ->name('admin.shipments.update');
+    Route::delete('/shipments/{id}', [ShipmentController::class, 'destroy'])
+        ->name('admin.shipments.destroy');
 });
 });

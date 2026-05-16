@@ -28,6 +28,7 @@ class UpdateShipmentRequest extends FormRequest
             'recipient_phone'      => ['sometimes', 'string', 'max:50'],
             'sender_id'            => ['sometimes', 'nullable', 'exists:clients,id'],
             'warehouse_id'         => ['sometimes', 'nullable', 'exists:warehouses,id'],
+            'status'               => ['sometimes', 'string', 'in:'.implode(',', \App\Models\Shipment::STATUSES)],
         ];
     }
 
@@ -58,6 +59,7 @@ class UpdateShipmentRequest extends FormRequest
             'recipient_phone'      => 'teléfono del destinatario',
             'sender_id'            => 'remitente',
             'warehouse_id'         => 'bodega',
+            'status'               => 'estado',
         ];
     }
 }
