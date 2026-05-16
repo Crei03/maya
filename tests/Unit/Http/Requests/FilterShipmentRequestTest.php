@@ -27,7 +27,7 @@ class FilterShipmentRequestTest extends TestCase
         $data = [
             'search'       => 'MAYA123',
             'status'       => 'pending',
-            'warehouse_id' => 5,
+            'warehouse_id' => '5',
             'driver_id'    => 12,
             'date_from'    => '2026-01-01',
             'date_to'      => '2026-12-31',

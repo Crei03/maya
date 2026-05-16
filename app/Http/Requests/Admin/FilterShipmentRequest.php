@@ -18,7 +18,7 @@ class FilterShipmentRequest extends FormRequest
         return [
             'search'       => ['string', 'nullable'],
             'status'       => ['string', 'nullable'],
-            'warehouse_id' => ['integer', 'nullable'],
+            'warehouse_id' => ['string', 'nullable'],
             'driver_id'    => ['integer', 'nullable'],
             'date_from'    => ['date', 'nullable'],
             'date_to'      => ['date', 'nullable', 'after_or_equal:date_from'],

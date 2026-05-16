@@ -6,6 +6,7 @@ namespace App\Repositories;
 
 use App\Models\Shipment;
 use App\Traits\HasTenantScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -44,6 +45,30 @@ class ShipmentRepository
 
         if (! empty($filters['status'] ?? null)) {
             $query->where('status', $filters['status']);
+        }
+
+        if (! empty($filters['search'] ?? null)) {
+            $search = $filters['search'];
+            $query->where(function (Builder $q) use ($search): void {
+                $q->where('tracking_number', 'like', "%{$search}%")
+                  ->orWhere('recipient_name', 'like', "%{$search}%");
+            });
+        }
+
+        if (! empty($filters['warehouse_id'] ?? null)) {
+            $query->where('warehouse_id', $filters['warehouse_id']);
+        }
+
+        if (! empty($filters['package_type'] ?? null)) {
+            $query->where('package_type', $filters['package_type']);
+        }
+
+        if (! empty($filters['date_from'] ?? null)) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+
+        if (! empty($filters['date_to'] ?? null)) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
         return $query->paginate($perPage);
