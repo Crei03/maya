@@ -17,7 +17,10 @@ return new class extends Migration
         });
 
         // Copy existing phone data from users to their driver_profiles
-        DB::statement('UPDATE driver_profiles dp JOIN users u ON u.id = dp.user_id SET dp.phone = u.phone');
+        // Using subquery instead of JOIN for cross-database compatibility
+        DB::table('driver_profiles')->update([
+            'phone' => DB::raw("(SELECT phone FROM users WHERE users.id = driver_profiles.user_id)"),
+        ]);
 
         // Drop phone from users
         Schema::table('users', function (Blueprint $table) {
@@ -33,7 +36,10 @@ return new class extends Migration
         });
 
         // Restore phone data from driver_profiles
-        DB::statement('UPDATE users u JOIN driver_profiles dp ON u.id = dp.user_id SET u.phone = dp.phone');
+        // Using subquery instead of JOIN for cross-database compatibility
+        DB::table('users')->update([
+            'phone' => DB::raw("(SELECT phone FROM driver_profiles WHERE driver_profiles.user_id = users.id)"),
+        ]);
 
         // Drop phone from driver_profiles
         Schema::table('driver_profiles', function (Blueprint $table) {
