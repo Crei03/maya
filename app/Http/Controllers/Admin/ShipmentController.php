@@ -10,7 +10,9 @@ use App\Http\Requests\Admin\FilterShipmentRequest;
 use App\Http\Requests\Admin\StoreShipmentRequest;
 use App\Http\Requests\Admin\UpdateShipmentRequest;
 use App\Models\Shipment;
+use App\Repositories\ShipmentRepository;
 use App\Services\ShipmentService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 
@@ -20,6 +22,7 @@ class ShipmentController extends Controller
 
     public function __construct(
         private readonly ShipmentService $service,
+        private readonly ShipmentRepository $repository,
     ) {}
 
     /**
@@ -39,15 +42,18 @@ class ShipmentController extends Controller
 
     /**
      * Mostrar un envío con relaciones.
-     *
-     * El servicio valida existencia y pertenencia al tenant (404 si no).
      */
     public function show(string $id): JsonResponse
     {
         $shipmentData = $this->service->show($id);
 
-        // Authorization needs the model instance (service returns array)
-        $shipment = Shipment::findOrFail($id);
+        $shipment = $this->repository->findByIdForTenant($id);
+        if (! $shipment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paquete no encontrado',
+            ], 404);
+        }
         $this->authorize('view', $shipment);
 
         return response()->json([
@@ -77,10 +83,13 @@ class ShipmentController extends Controller
      */
     public function update(UpdateShipmentRequest $request, string $id): JsonResponse
     {
-        // Validate existence and tenant scoping first (404 if not found)
-        $this->service->show($id);
-
-        $shipment = Shipment::findOrFail($id);
+        $shipment = $this->repository->findByIdForTenant($id);
+        if (! $shipment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paquete no encontrado',
+            ], 404);
+        }
         $this->authorize('update', $shipment);
 
         $updated = $this->service->update($id, $request->validated());
@@ -97,10 +106,13 @@ class ShipmentController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        // Validate existence and tenant scoping first (404 if not found)
-        $this->service->show($id);
-
-        $shipment = Shipment::findOrFail($id);
+        $shipment = $this->repository->findByIdForTenant($id);
+        if (! $shipment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Paquete no encontrado',
+            ], 404);
+        }
         $this->authorize('delete', $shipment);
 
         try {

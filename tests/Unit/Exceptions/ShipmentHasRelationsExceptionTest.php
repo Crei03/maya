@@ -19,7 +19,7 @@ class ShipmentHasRelationsExceptionTest extends TestCase
 
         // Assert: message format
         $this->assertSame(
-            "Cannot delete shipment #abc-123: has associated trackingEvents",
+            'No se puede eliminar el paquete #abc-123: tiene trackingEvents asociados',
             $exception->getMessage()
         );
     }
@@ -42,7 +42,7 @@ class ShipmentHasRelationsExceptionTest extends TestCase
         );
 
         $this->assertSame(
-            "Cannot delete shipment #def-789: has associated shipmentTaskItems",
+            'No se puede eliminar el paquete #def-789: tiene shipmentTaskItems asociados',
             $exception->getMessage()
         );
     }

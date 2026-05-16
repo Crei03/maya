@@ -17,7 +17,7 @@ class ShipmentHasRelationsException extends RuntimeException
     public function __construct(string $shipmentId, string $relationType)
     {
         parent::__construct(
-            sprintf('Cannot delete shipment #%s: has associated %s', $shipmentId, $relationType)
+            sprintf('No se puede eliminar el paquete #%s: tiene %s asociados', $shipmentId, $relationType)
         );
     }
 }

@@ -71,6 +71,12 @@ class ShipmentRepository
             $query->whereDate('created_at', '<=', $filters['date_to']);
         }
 
+        if (! empty($filters['driver_id'] ?? null)) {
+            $query->whereHas('assignedTask', function (Builder $q) use ($filters): void {
+                $q->where('driver_id', $filters['driver_id']);
+            });
+        }
+
         return $query->paginate($perPage);
     }
 }
