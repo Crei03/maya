@@ -14,6 +14,7 @@ const sections = [
     { key: 'clientes', label: 'Clientes', icon: ['fas', 'user'], route: route('admin.configuracion.clientes') },
     { key: 'usuarios', label: 'Usuarios', icon: ['fas', 'users'], route: route('admin.configuracion.usuarios') },
     { key: 'transporte', label: 'Transporte', icon: ['fas', 'truck'], route: route('admin.configuracion.transportes') },
+    { key: 'bodegas', label: 'Bodegas', icon: ['fas', 'warehouse'], route: route('admin.configuracion.bodegas') },
     { key: 'conductor', label: 'Conductor', icon: ['fas', 'id-card'], route: route('admin.configuracion.conductores') },
     { key: 'catalogos', label: 'Catálogos', icon: ['fas', 'book'], route: route('admin.configuracion.catalogos') },
     { key: 'roles', label: 'Roles', icon: ['fas', 'shield-alt'] },

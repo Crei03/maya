@@ -1,9 +1,11 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/input/InputError.vue';
 import InputLabel from '@/Components/input/InputLabel.vue';
 import TextInput from '@/Components/input/TextInput.vue';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const props = defineProps({
     show: {
@@ -61,6 +63,96 @@ const normalizedFields = computed(() => props.fields || []);
 
 const gridClass = computed(() => {
     return props.columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+});
+
+// --- Leaflet map state ---
+const mapContainer = ref(null);
+let mapInstance = null;
+let markerInstance = null;
+
+const mapField = computed(() => {
+    return normalizedFields.value.find((f) => f.type === 'map');
+});
+
+const initMap = async () => {
+    if (!mapContainer.value || !mapField.value) return;
+
+    const field = mapField.value;
+    const defaultCenter = field.defaultCenter ?? [-34.6037, -58.3816];
+    const defaultZoom = field.defaultZoom ?? 13;
+
+    // Fix Leaflet default marker icon paths (Vite bundling issue)
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+
+    mapInstance = L.map(mapContainer.value).setView(defaultCenter, defaultZoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+    }).addTo(mapInstance);
+
+    // If existing coords (edit mode), place marker
+    const existingCoords = props.modelValue[field.key];
+    if (existingCoords && existingCoords.lat && existingCoords.lng) {
+        markerInstance = L.marker([existingCoords.lat, existingCoords.lng]).addTo(mapInstance);
+        mapInstance.setView([existingCoords.lat, existingCoords.lng], defaultZoom);
+    }
+
+    // Click handler: place/move marker and update form
+    mapInstance.on('click', (e) => {
+        const { lat, lng } = e.latlng;
+
+        if (markerInstance) {
+            markerInstance.setLatLng([lat, lng]);
+        } else {
+            markerInstance = L.marker([lat, lng]).addTo(mapInstance);
+        }
+
+        updateField(field.key, { lat, lng });
+    });
+
+    // Gray tile fix: invalidateSize after modal renders
+    await nextTick();
+    setTimeout(() => {
+        if (mapInstance) {
+            mapInstance.invalidateSize();
+        }
+    }, 100);
+};
+
+const destroyMap = () => {
+    if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+        markerInstance = null;
+    }
+};
+
+// Watch for modal open to init map
+watch(
+    () => props.show,
+    async (newVal) => {
+        if (newVal && mapField.value) {
+            await nextTick();
+            await initMap();
+        }
+    },
+);
+
+onMounted(async () => {
+    if (props.show && mapField.value) {
+        await nextTick();
+        await initMap();
+    }
+});
+
+onUnmounted(() => {
+    destroyMap();
 });
 </script>
 
@@ -125,6 +217,18 @@ const gridClass = computed(() => {
                                 />
                             </span>
                         </label>
+                    </template>
+
+                    <template v-else-if="field.type === 'map'">
+                        <div
+                            ref="mapContainer"
+                            class="mt-1 w-full rounded-md border border-[var(--maya-border)]"
+                            style="height: 300px"
+                        />
+                        <p class="mt-1 text-xs text-[var(--maya-text-muted)]">
+                            Haz clic en el mapa para seleccionar la ubicación.
+                        </p>
+                        <InputError class="mt-1" :message="errors[field.key]?.[0]" />
                     </template>
 
                     <template v-else>
