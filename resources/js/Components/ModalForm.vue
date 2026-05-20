@@ -66,16 +66,37 @@ const gridClass = computed(() => {
 });
 
 // --- Leaflet map state ---
-const mapContainer = ref(null);
+let mapContainerEl = null;
 let mapInstance = null;
 let markerInstance = null;
+
+const setMapContainer = (el) => {
+    mapContainerEl = el;
+};
 
 const mapField = computed(() => {
     return normalizedFields.value.find((f) => f.type === 'map');
 });
 
 const initMap = async () => {
-    if (!mapContainer.value || !mapField.value) return;
+    if (!mapContainerEl || !mapField.value) return;
+    
+    // Prevent double initialization
+    if (mapInstance) {
+        destroyMap();
+    }
+
+    // Ensure container is a real DOM element with dimensions
+    if (!(mapContainerEl instanceof HTMLElement)) {
+        console.warn('Map container is not an HTMLElement', mapContainerEl);
+        return;
+    }
+
+    const rect = mapContainerEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        console.warn('Map container has no dimensions, waiting...');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
 
     const field = mapField.value;
     const defaultCenter = field.defaultCenter ?? [-34.6037, -58.3816];
@@ -89,7 +110,7 @@ const initMap = async () => {
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
     });
 
-    mapInstance = L.map(mapContainer.value).setView(defaultCenter, defaultZoom);
+    mapInstance = L.map(mapContainerEl).setView(defaultCenter, defaultZoom);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
@@ -116,13 +137,9 @@ const initMap = async () => {
         updateField(field.key, { lat, lng });
     });
 
-    // Gray tile fix: invalidateSize after modal renders
-    await nextTick();
-    setTimeout(() => {
-        if (mapInstance) {
-            mapInstance.invalidateSize();
-        }
-    }, 100);
+    // Final invalidateSize
+    mapInstance.invalidateSize();
+    console.log('Map initialized successfully');
 };
 
 const destroyMap = () => {
@@ -131,15 +148,20 @@ const destroyMap = () => {
         mapInstance = null;
         markerInstance = null;
     }
+    mapContainerEl = null;
 };
 
-// Watch for modal open to init map
+// Watch for modal open/close to manage map lifecycle
 watch(
     () => props.show,
     async (newVal) => {
         if (newVal && mapField.value) {
-            await nextTick();
+            // Wait for modal transition (300ms) + buffer before init
+            await new Promise((resolve) => setTimeout(resolve, 350));
             await initMap();
+        } else {
+            // Clean up map when modal closes
+            destroyMap();
         }
     },
 );
@@ -221,9 +243,9 @@ onUnmounted(() => {
 
                     <template v-else-if="field.type === 'map'">
                         <div
-                            ref="mapContainer"
+                            :ref="setMapContainer"
                             class="mt-1 w-full rounded-md border border-[var(--maya-border)]"
-                            style="height: 300px"
+                            style="height: 300px; z-index: 1"
                         />
                         <p class="mt-1 text-xs text-[var(--maya-text-muted)]">
                             Haz clic en el mapa para seleccionar la ubicación.
