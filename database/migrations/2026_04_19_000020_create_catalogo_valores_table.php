@@ -1,7 +1,9 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,22 +13,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::disableForeignKeyConstraints();
+        Schema::create('catalogo_valores', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('catalogo_id')->constrained('catalogos');
+            $table->foreignId('parent_id')->nullable()->constrained('catalogo_valores');
+            $table->string('codigo', 100);
+            $table->string('valor', 255);
+            $table->text('descripcion')->nullable();
+            $table->timestamps();
 
-        DB::statement('CREATE TABLE catalogo_valores (
-            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            catalogo_id BIGINT UNSIGNED NOT NULL,
-            parent_id BIGINT UNSIGNED NULL,
-            codigo VARCHAR(100) NOT NULL,
-            valor VARCHAR(255) NOT NULL,
-            descripcion TEXT NULL,
-            created_at TIMESTAMP NULL,
-            updated_at TIMESTAMP NULL,
-            UNIQUE KEY catalogo_valores_catalogo_id_codigo_unique (catalogo_id, codigo),
-            KEY catalogo_valores_parent_id_index (parent_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
-
-        Schema::enableForeignKeyConstraints();
+            $table->unique(['catalogo_id', 'codigo']);
+        });
     }
 
     /**
@@ -34,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement('DROP TABLE IF EXISTS catalogo_valores');
+        Schema::dropIfExists('catalogo_valores');
     }
 };

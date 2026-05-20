@@ -27,7 +27,7 @@ class WarehouseUpdateRequest extends FormRequest
             'code'             => [
                 'required',
                 'string',
-                'max:50',
+                'max:250',
                 Rule::unique('warehouses')
                     ->where(fn ($q) => $q->where('tenant_id', $tenantId))
                     ->ignore($warehouseId),
@@ -49,7 +49,7 @@ class WarehouseUpdateRequest extends FormRequest
             'name.max'                  => 'El nombre no puede superar 255 caracteres.',
             'code.required'             => 'El código es obligatorio.',
             'code.unique'               => 'El código ya está en uso.',
-            'code.max'                  => 'El código no puede superar 50 caracteres.',
+            'code.max'                  => 'El código no puede superar 250 caracteres.',
             'location_address.max'      => 'La dirección no puede superar 500 caracteres.',
             'location_coords.array'     => 'Las coordenadas deben ser un objeto válido.',
             'phone.max'                 => 'El teléfono no puede superar 50 caracteres.',

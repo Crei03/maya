@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\Shipment;
 use App\Models\Warehouse;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 class WarehouseService
 {
@@ -16,8 +18,9 @@ class WarehouseService
      */
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $search   = trim((string) ($filters['search'] ?? ''));
-        $isActive = $filters['is_active'] ?? null;
+        $search       = trim((string) ($filters['search'] ?? ''));
+        $isActive     = $filters['is_active'] ?? null;
+        $hasShipments = $filters['has_shipments'] ?? null;
 
         return Warehouse::query()
             ->when($search !== '', function ($q) use ($search) {
@@ -27,6 +30,8 @@ class WarehouseService
                 });
             })
             ->when($isActive !== null, fn ($q) => $q->where('is_active', (bool) $isActive))
+            ->when($hasShipments === '1', fn ($q) => $q->has('shipments'))
+            ->when($hasShipments === '0', fn ($q) => $q->doesntHave('shipments'))
             ->orderByDesc('created_at')
             ->paginate($perPage);
     }
@@ -87,6 +92,12 @@ class WarehouseService
     public function delete(string $id): bool
     {
         $warehouse = $this->find($id);
+
+        if ($warehouse->shipments()->whereNotIn('status', [Shipment::STATUS_DELIVERED])->exists()) {
+            throw ValidationException::withMessages([
+                'warehouse' => 'No se puede eliminar la bodega con envíos activos.',
+            ]);
+        }
 
         return (bool) $warehouse->delete();
     }
