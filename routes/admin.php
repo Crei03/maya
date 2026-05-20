@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\ManifestController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\Admin\VehicleController;
+use App\Http\Controllers\Admin\WarehouseController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -55,6 +56,9 @@ Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
 
 Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
     ->name('admin.configuracion.transportes');
+
+Route::get('/configuracion/bodegas', [WarehouseController::class, 'page'])
+    ->name('admin.configuracion.bodegas');
 
 Route::get('/configuracion/conductores', [SettingsController::class, 'drivers'])
     ->name('admin.configuracion.conductores');
@@ -156,6 +160,18 @@ Route::prefix('api')->group(function () {
         ->name('admin.vehicles.update');
     Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
         ->name('admin.vehicles.destroy');
+
+    // Bodegas / Warehouses
+    Route::get('/bodegas', [WarehouseController::class, 'list'])
+        ->name('admin.bodegas.list');
+    Route::post('/bodegas', [WarehouseController::class, 'store'])
+        ->name('admin.bodegas.store');
+    Route::get('/bodegas/{warehouse}', [WarehouseController::class, 'show'])
+        ->name('admin.bodegas.show');
+    Route::patch('/bodegas/{warehouse}', [WarehouseController::class, 'update'])
+        ->name('admin.bodegas.update');
+    Route::delete('/bodegas/{warehouse}', [WarehouseController::class, 'destroy'])
+        ->name('admin.bodegas.destroy');
 
     // Conductores
     Route::get('/drivers', [DriverController::class, 'list'])

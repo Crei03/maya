@@ -1,9 +1,11 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import InputError from '@/Components/input/InputError.vue';
 import InputLabel from '@/Components/input/InputLabel.vue';
 import TextInput from '@/Components/input/TextInput.vue';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const props = defineProps({
     show: {
@@ -61,6 +63,118 @@ const normalizedFields = computed(() => props.fields || []);
 
 const gridClass = computed(() => {
     return props.columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2';
+});
+
+// --- Leaflet map state ---
+let mapContainerEl = null;
+let mapInstance = null;
+let markerInstance = null;
+
+const setMapContainer = (el) => {
+    mapContainerEl = el;
+};
+
+const mapField = computed(() => {
+    return normalizedFields.value.find((f) => f.type === 'map');
+});
+
+const initMap = async () => {
+    if (!mapContainerEl || !mapField.value) return;
+    
+    // Prevent double initialization
+    if (mapInstance) {
+        destroyMap();
+    }
+
+    // Ensure container is a real DOM element with dimensions
+    if (!(mapContainerEl instanceof HTMLElement)) {
+        console.warn('Map container is not an HTMLElement', mapContainerEl);
+        return;
+    }
+
+    const rect = mapContainerEl.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+        console.warn('Map container has no dimensions, waiting...');
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+
+    const field = mapField.value;
+    const defaultCenter = field.defaultCenter ?? [-34.6037, -58.3816];
+    const defaultZoom = field.defaultZoom ?? 13;
+
+    // Fix Leaflet default marker icon paths (Vite bundling issue)
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+
+    mapInstance = L.map(mapContainerEl).setView(defaultCenter, defaultZoom);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+    }).addTo(mapInstance);
+
+    // If existing coords (edit mode), place marker
+    const existingCoords = props.modelValue[field.key];
+    if (existingCoords && existingCoords.lat && existingCoords.lng) {
+        markerInstance = L.marker([existingCoords.lat, existingCoords.lng]).addTo(mapInstance);
+        mapInstance.setView([existingCoords.lat, existingCoords.lng], defaultZoom);
+    }
+
+    // Click handler: place/move marker and update form
+    mapInstance.on('click', (e) => {
+        const { lat, lng } = e.latlng;
+
+        if (markerInstance) {
+            markerInstance.setLatLng([lat, lng]);
+        } else {
+            markerInstance = L.marker([lat, lng]).addTo(mapInstance);
+        }
+
+        updateField(field.key, { lat, lng });
+    });
+
+    // Final invalidateSize
+    mapInstance.invalidateSize();
+    console.log('Map initialized successfully');
+};
+
+const destroyMap = () => {
+    if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+        markerInstance = null;
+    }
+    mapContainerEl = null;
+};
+
+// Watch for modal open/close to manage map lifecycle
+watch(
+    () => props.show,
+    async (newVal) => {
+        if (newVal && mapField.value) {
+            // Wait for modal transition (300ms) + buffer before init
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            await initMap();
+        } else {
+            // Clean up map when modal closes
+            destroyMap();
+        }
+    },
+);
+
+onMounted(async () => {
+    if (props.show && mapField.value) {
+        await nextTick();
+        await initMap();
+    }
+});
+
+onUnmounted(() => {
+    destroyMap();
 });
 </script>
 
@@ -125,6 +239,18 @@ const gridClass = computed(() => {
                                 />
                             </span>
                         </label>
+                    </template>
+
+                    <template v-else-if="field.type === 'map'">
+                        <div
+                            :ref="setMapContainer"
+                            class="mt-1 w-full rounded-md border border-[var(--maya-border)]"
+                            style="height: 300px; z-index: 1"
+                        />
+                        <p class="mt-1 text-xs text-[var(--maya-text-muted)]">
+                            Haz clic en el mapa para seleccionar la ubicación.
+                        </p>
+                        <InputError class="mt-1" :message="errors[field.key]?.[0]" />
                     </template>
 
                     <template v-else>
