@@ -11,7 +11,7 @@ namespace App\Traits;
 // because the instance is not App\Models\Tenant. Keeping the Spatie import here
 // is fine because by the time creating() fires, the container already holds
 // the correct App\Models\Tenant instance set by EnsureTenant middleware.
-use Spatie\Multitenancy\Models\Tenant;
+use App\Models\Tenant;
 
 trait HasTenant
 {

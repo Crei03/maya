@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Shipment;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -25,12 +26,14 @@ class WarehouseApiTest extends TestCase
         // Disable multi-tenant for testing; HasTenant falls back to 'demo' tenant
         config(['multi-tenant.enabled' => false]);
 
-        $this->tenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Demo',
-            'slug'   => 'demo',
-            'status' => 'active',
-        ]);
+        $this->tenant = Tenant::query()->firstOrCreate(
+            ['slug' => 'demo'],
+            [
+                'id'     => (string) Str::uuid(),
+                'name'   => 'Demo',
+                'status' => 'active',
+            ],
+        );
 
         $this->gestor = User::factory()->create([
             'role'     => User::ROLE_GESTOR,
@@ -443,6 +446,78 @@ class WarehouseApiTest extends TestCase
         $response->assertOk()
             ->assertJsonCount(2, 'data.data')
             ->assertJsonPath('data.total', 2);
+    }
+
+    // ============================================================================
+    // 3.8: has_shipments filter
+    // ============================================================================
+
+    public function test_list_warehouses_filter_by_has_shipments(): void
+    {
+        $withShipments = Warehouse::factory()->create(['name' => 'With Shipments']);
+        $withoutShipments = Warehouse::factory()->create(['name' => 'Empty']);
+
+        // Create shipments for the first warehouse
+        Shipment::factory()->inWarehouse($withShipments)->create();
+        Shipment::factory()->inWarehouse($withShipments)->create();
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.bodegas.list', ['has_shipments' => '1']));
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.name', 'With Shipments');
+    }
+
+    public function test_list_warehouses_filter_by_no_shipments(): void
+    {
+        $withShipments = Warehouse::factory()->create(['name' => 'With Shipments']);
+        $withoutShipments = Warehouse::factory()->create(['name' => 'Empty']);
+
+        Shipment::factory()->inWarehouse($withShipments)->create();
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.bodegas.list', ['has_shipments' => '0']));
+
+        $response->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.name', 'Empty');
+    }
+
+    // ============================================================================
+    // 3.9: Delete validation — blocks when warehouse has active shipments
+    // ============================================================================
+
+    public function test_delete_warehouse_blocked_when_has_active_shipments(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        Shipment::factory()->inWarehouse($warehouse)->create();
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.bodegas.destroy', $warehouse->id));
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['warehouse']);
+        $response->assertJsonPath('errors.warehouse.0', 'No se puede eliminar la bodega con envíos activos.');
+
+        // Verify warehouse was NOT deleted
+        $this->assertNull(Warehouse::withTrashed()->find($warehouse->id)->deleted_at);
+    }
+
+    public function test_delete_warehouse_allowed_when_only_delivered_shipments(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        Shipment::factory()->inWarehouse($warehouse)->delivered()->create();
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.bodegas.destroy', $warehouse->id));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Bodega eliminada correctamente.');
+
+        // Verify soft delete succeeded
+        $this->assertNotNull(Warehouse::withTrashed()->find($warehouse->id)->deleted_at);
     }
 
     // ============================================================================

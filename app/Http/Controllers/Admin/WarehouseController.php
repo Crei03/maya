@@ -32,7 +32,7 @@ class WarehouseController extends Controller
     public function list(Request $request): JsonResponse
     {
         $warehouses = $this->warehouseService->paginate(
-            $request->only(['search', 'is_active']),
+            $request->only(['search', 'is_active', 'has_shipments']),
             (int) ($request->input('per_page', 15))
         );
 
