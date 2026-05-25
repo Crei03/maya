@@ -22,11 +22,15 @@ class TenantFactory extends Factory
      */
     public function definition(): array
     {
+        $slug = $this->faker->unique()->slug(2);
+
         return [
             'id'            => (string) Str::uuid(),
-            'name'          => fake()->company(),
-            'slug'          => fake()->unique()->slug(),
-            'contact_email' => fake()->unique()->safeEmail(),
+            'name'          => $this->faker->company(),
+            'slug'          => $slug,
+            'contact_email' => $this->faker->safeEmail(),
+            'phone'         => $this->faker->phoneNumber(),
+            'address'       => $this->faker->address(),
             'status'        => 'active',
         ];
     }

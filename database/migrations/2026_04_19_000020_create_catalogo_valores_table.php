@@ -15,14 +15,15 @@ return new class extends Migration
     {
         Schema::create('catalogo_valores', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('catalogo_id')->constrained('catalogos');
-            $table->foreignId('parent_id')->nullable()->constrained('catalogo_valores');
+            $table->unsignedBigInteger('catalogo_id');
+            $table->unsignedBigInteger('parent_id')->nullable();
             $table->string('codigo', 100);
-            $table->string('valor', 255);
+            $table->string('valor');
             $table->text('descripcion')->nullable();
-            $table->timestamps();
-
-            $table->unique(['catalogo_id', 'codigo']);
+            $table->timestamp('created_at')->nullable();
+            $table->timestamp('updated_at')->nullable();
+            $table->unique(['catalogo_id', 'codigo'], 'catalogo_valores_catalogo_id_codigo_unique');
+            $table->index('parent_id', 'catalogo_valores_parent_id_index');
         });
     }
 
