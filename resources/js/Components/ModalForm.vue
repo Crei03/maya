@@ -122,6 +122,21 @@ const initMap = async () => {
     if (existingCoords && existingCoords.lat && existingCoords.lng) {
         markerInstance = L.marker([existingCoords.lat, existingCoords.lng]).addTo(mapInstance);
         mapInstance.setView([existingCoords.lat, existingCoords.lng], defaultZoom);
+    } else if (navigator.geolocation) {
+        // Request user's location for new records
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude: lat, longitude: lng } = position.coords;
+                mapInstance.setView([lat, lng], defaultZoom);
+                markerInstance = L.marker([lat, lng]).addTo(mapInstance);
+                updateField(field.key, { lat, lng });
+            },
+            () => {
+                // User denied or geolocation failed — keep defaultCenter
+                console.log('Geolocation denied or unavailable, using default center');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 },
+        );
     }
 
     // Click handler: place/move marker and update form

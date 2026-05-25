@@ -64,7 +64,7 @@ const bodegasFormFields = computed(() => [
     { key: 'name',             label: 'Nombre',              type: 'text',   placeholder: 'Ej: Bodega Central' },
     { key: 'location_address', label: 'Dirección',           type: 'text',   placeholder: 'Ej: Calle 123, Ciudad' },
     { key: 'phone',            label: 'Teléfono',            type: 'text',   placeholder: 'Opcional' },
-    { key: 'location_coords',  label: 'Ubicación en mapa',   type: 'map',    defaultCenter: [-34.6037, -58.3816], defaultZoom: 13, colSpan: 2 },
+    { key: 'location_coords',  label: 'Ubicación en mapa',   type: 'map',    defaultCenter: [9.0816, -79.5000], defaultZoom: 13, colSpan: 2 },
     { key: 'is_active',        label: 'Activo',              type: 'switch' },
 ]);
 
