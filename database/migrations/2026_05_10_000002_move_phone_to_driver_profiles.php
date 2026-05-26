@@ -16,11 +16,18 @@ return new class extends Migration
             $table->string('phone', 30)->nullable()->after('is_available');
         });
 
-        // Copy existing phone data from users to their driver_profiles
-        // Using subquery instead of JOIN for cross-database compatibility
-        DB::table('driver_profiles')->update([
-            'phone' => DB::raw("(SELECT phone FROM users WHERE users.id = driver_profiles.user_id)"),
-        ]);
+        // Copy existing phone data from users to their driver_profiles (SQLite-compatible)
+        $rows = DB::table('users')
+            ->join('driver_profiles', 'users.id', '=', 'driver_profiles.user_id')
+            ->whereNotNull('users.phone')
+            ->select('driver_profiles.id as profile_id', 'users.phone')
+            ->get();
+
+        foreach ($rows as $row) {
+            DB::table('driver_profiles')
+                ->where('id', $row->profile_id)
+                ->update(['phone' => $row->phone]);
+        }
 
         // Drop phone from users
         Schema::table('users', function (Blueprint $table) {
@@ -35,11 +42,18 @@ return new class extends Migration
             $table->string('phone', 30)->nullable()->after('email');
         });
 
-        // Restore phone data from driver_profiles
-        // Using subquery instead of JOIN for cross-database compatibility
-        DB::table('users')->update([
-            'phone' => DB::raw("(SELECT phone FROM driver_profiles WHERE driver_profiles.user_id = users.id)"),
-        ]);
+        // Restore phone data from driver_profiles (SQLite-compatible)
+        $rows = DB::table('driver_profiles')
+            ->join('users', 'driver_profiles.user_id', '=', 'users.id')
+            ->whereNotNull('driver_profiles.phone')
+            ->select('users.id as user_id', 'driver_profiles.phone')
+            ->get();
+
+        foreach ($rows as $row) {
+            DB::table('users')
+                ->where('id', $row->user_id)
+                ->update(['phone' => $row->phone]);
+        }
 
         // Drop phone from driver_profiles
         Schema::table('driver_profiles', function (Blueprint $table) {
