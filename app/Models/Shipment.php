@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Scopes\TenantScope;
 use App\Traits\HasTenant;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -193,6 +194,14 @@ class Shipment extends Model
                 $shipment->status = self::STATUS_PENDING;
             }
         });
+    }
+
+    /**
+     * Apply global tenant scope to all queries.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new TenantScope());
     }
 
     /**
