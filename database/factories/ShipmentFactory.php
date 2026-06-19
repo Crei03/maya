@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Models\Client;
 use App\Models\Shipment;
 use App\Models\Tenant;
 use App\Models\Warehouse;
@@ -28,37 +27,33 @@ class ShipmentFactory extends Factory
         $weightKg = $this->faker->randomFloat(2, 0.1, 30.0);
 
         return [
-            'id'                      => (string) Str::uuid(),
-            'tenant_id'               => Tenant::factory(),
-            'warehouse_id'            => null,
-            'assigned_task_id'        => null,
-            'tracking_number'         => 'MAYA' . strtoupper(Str::random(10)),
-            'sender_id'               => null,
-            'recipient_name'          => $this->faker->name(),
-            'recipient_phone'         => $this->faker->numerify('6###-####'),
-            'origin_address'          => $this->faker->address(),
-            'destination_address'     => $this->faker->address(),
-            'destination_coords'      => [
+            'id' => (string) Str::uuid(),
+            'tenant_id' => Tenant::factory(),
+            'warehouse_id' => Warehouse::factory(),
+            'driver_task' => null,
+            'tracking_number' => 'MAYA'.strtoupper(Str::random(10)),
+            'sender_id' => null,
+            'destination_address' => $this->faker->address(),
+            'destination_coords' => [
                 'lat' => $this->faker->latitude(8.0, 9.5),
                 'lng' => $this->faker->longitude(-80.0, -77.0),
             ],
-            'weight_kg'               => $weightKg,
-            'weight_lb'               => round($weightKg * 2.20462, 2),
-            'total_cost'              => $this->faker->randomFloat(2, 5.0, 100.0),
-            'content_description'     => $this->faker->sentence(),
-            'package_type'            => $this->faker->randomElement(['caja', 'sobre', 'palet', 'bolsa', 'tubo']),
-            'dimensions'              => [
+            'weight_lb' => round($weightKg * 2.20462, 2),
+            'weight_kg' => $weightKg,
+            'total_cost' => $this->faker->randomFloat(2, 5.0, 100.0),
+            'content_description' => $this->faker->sentence(),
+            'package_type' => $this->faker->randomElement(['caja', 'sobre', 'palet', 'bolsa', 'tubo']),
+            'dimensions' => [
                 'largo' => $this->faker->numberBetween(5, 100),
                 'ancho' => $this->faker->numberBetween(5, 100),
-                'alto'  => $this->faker->numberBetween(5, 100),
+                'alto' => $this->faker->numberBetween(5, 100),
             ],
-            'status'                  => Shipment::STATUS_PENDING,
-            'current_status_id'       => null,
-            'label_url'               => null,
-            'delivered_photo_url'     => null,
+            'status' => Shipment::STATUS_PENDING,
+            'label_url' => null,
+            'delivered_photo_url' => null,
             'recipient_signature_url' => null,
-            'eta'                     => $this->faker->dateTimeBetween('+1 day', '+7 days'),
-            'delivered_at'            => null,
+            'eta' => $this->faker->dateTimeBetween('+1 day', '+7 days'),
+            'delivered_at' => null,
         ];
     }
 
@@ -68,7 +63,7 @@ class ShipmentFactory extends Factory
     public function inWarehouse(Warehouse $warehouse): static
     {
         return $this->state(fn () => [
-            'status'       => Shipment::STATUS_IN_WAREHOUSE,
+            'status' => Shipment::STATUS_IN_WAREHOUSE,
             'warehouse_id' => $warehouse->id,
         ]);
     }
@@ -99,7 +94,7 @@ class ShipmentFactory extends Factory
     public function delivered(): static
     {
         return $this->state(fn () => [
-            'status'       => Shipment::STATUS_DELIVERED,
+            'status' => Shipment::STATUS_DELIVERED,
             'delivered_at' => now(),
         ]);
     }

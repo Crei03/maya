@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Client;
 use App\Models\Shipment;
 use App\Models\Tenant;
 use App\Models\User;
@@ -17,6 +18,7 @@ class ShipmentApiTest extends TestCase
     use RefreshDatabase;
 
     private User $gestor;
+
     private Tenant $tenant;
 
     protected function setUp(): void
@@ -30,16 +32,16 @@ class ShipmentApiTest extends TestCase
         $this->tenant = Tenant::query()->firstOrCreate(
             ['slug' => 'demo'],
             [
-                'id'     => (string) Str::uuid(),
-                'name'   => 'Demo',
+                'id' => (string) Str::uuid(),
+                'name' => 'Demo',
                 'status' => 'active',
             ],
         );
         $this->tenant->makeCurrent();
 
         $this->gestor = User::factory()->create([
-            'role'      => User::ROLE_GESTOR,
-            'status'    => true,
+            'role' => User::ROLE_GESTOR,
+            'status' => true,
             'tenant_id' => $this->tenant->id,
         ]);
     }
@@ -68,9 +70,9 @@ class ShipmentApiTest extends TestCase
         Shipment::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
 
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         Shipment::factory()->count(3)->create(['tenant_id' => $otherTenant->id]);
@@ -100,13 +102,15 @@ class ShipmentApiTest extends TestCase
 
     public function test_create_shipment_with_valid_data(): void
     {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
         $payload = [
-            'recipient_name'      => 'Juan Pérez',
             'destination_address' => 'Calle 50, Edificio Plaza, Panamá',
-            'package_type'        => 'caja',
-            'weight_kg'           => 5.5,
-            'recipient_phone'     => '+507 6000-1234',
-            'origin_address'      => 'Bodega Central',
+            'package_type' => 'caja',
+            'weight_lb' => 12.13,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
             'content_description' => 'Documentos importantes',
         ];
 
@@ -116,24 +120,21 @@ class ShipmentApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Paquete creado exitosamente')
-            ->assertJsonPath('data.recipient_name', 'Juan Pérez')
-            ->assertJsonPath('data.package_type', 'caja');
-
-        $this->assertDatabaseHas('shipments', [
-            'recipient_name' => 'Juan Pérez',
-            'tenant_id'      => $this->tenant->id,
-        ]);
+            ->assertJsonPath('data.package_type', 'caja')
+            ->assertJsonPath('data.weight_lb', '12.13');
     }
 
     public function test_create_shipment_auto_generates_tracking_number(): void
     {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
         $payload = [
-            'recipient_name'      => 'Auto Track',
             'destination_address' => 'Destino Test',
-            'package_type'        => 'sobre',
-            'weight_kg'           => 1.0,
-            'recipient_phone'     => '+507 6000-0001',
-            'origin_address'      => 'Origen Test',
+            'package_type' => 'sobre',
+            'weight_lb' => 2.2,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
         ];
 
         $response = $this->actingAs($this->gestor)
@@ -149,13 +150,15 @@ class ShipmentApiTest extends TestCase
 
     public function test_create_shipment_auto_generates_uuid(): void
     {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
         $payload = [
-            'recipient_name'      => 'UUID Test',
             'destination_address' => 'Destino UUID',
-            'package_type'        => 'caja',
-            'weight_kg'           => 2.0,
-            'recipient_phone'     => '+507 6000-0002',
-            'origin_address'      => 'Origen UUID',
+            'package_type' => 'caja',
+            'weight_lb' => 4.4,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
         ];
 
         $response = $this->actingAs($this->gestor)
@@ -170,12 +173,9 @@ class ShipmentApiTest extends TestCase
     public function test_create_shipment_requires_authentication(): void
     {
         $response = $this->postJson(route('admin.shipments.store'), [
-            'recipient_name'      => 'Test',
             'destination_address' => 'Test',
-            'package_type'        => 'caja',
-            'weight_kg'           => 1.0,
-            'recipient_phone'     => '+507 6000-0003',
-            'origin_address'      => 'Origen Auth',
+            'package_type' => 'caja',
+            'weight_lb' => 2.2,
         ]);
 
         $response->assertUnauthorized();
@@ -187,7 +187,7 @@ class ShipmentApiTest extends TestCase
             ->postJson(route('admin.shipments.store'), []);
 
         $response->assertUnprocessable()
-            ->assertJsonValidationErrors(['recipient_name', 'destination_address', 'package_type', 'weight_kg']);
+            ->assertJsonValidationErrors(['destination_address', 'package_type', 'weight_lb', 'sender_id', 'warehouse_id']);
     }
 
     // ============================================================================
@@ -198,7 +198,7 @@ class ShipmentApiTest extends TestCase
     {
         $warehouse = Warehouse::factory()->create();
         $shipment = Shipment::factory()->create([
-            'tenant_id'    => $this->tenant->id,
+            'tenant_id' => $this->tenant->id,
             'warehouse_id' => $warehouse->id,
         ]);
 
@@ -208,7 +208,7 @@ class ShipmentApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $shipment->id)
-            ->assertJsonPath('data.recipient_name', $shipment->recipient_name);
+            ->assertJsonPath('data.destination_address', $shipment->destination_address);
     }
 
     public function test_show_shipment_returns_404_for_nonexistent(): void
@@ -237,22 +237,20 @@ class ShipmentApiTest extends TestCase
     public function test_update_shipment_partial_update(): void
     {
         $shipment = Shipment::factory()->create([
-            'tenant_id'      => $this->tenant->id,
-            'recipient_name' => 'Original Name',
-            'status'         => Shipment::STATUS_PENDING,
-            'weight_kg'      => 5.0,
+            'tenant_id' => $this->tenant->id,
+            'status' => Shipment::STATUS_PENDING,
+            'weight_lb' => 11.0,
         ]);
 
         $response = $this->actingAs($this->gestor)
             ->patchJson(route('admin.shipments.update', $shipment->id), [
-                'status'    => Shipment::STATUS_IN_WAREHOUSE,
-                'weight_kg' => 8.5,
+                'status' => Shipment::STATUS_IN_WAREHOUSE,
+                'weight_lb' => 18.5,
             ]);
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', Shipment::STATUS_IN_WAREHOUSE)
-            ->assertJsonPath('data.recipient_name', 'Original Name');
+            ->assertJsonPath('data.status', Shipment::STATUS_IN_WAREHOUSE);
     }
 
     public function test_update_shipment_returns_404_for_nonexistent(): void
@@ -303,9 +301,9 @@ class ShipmentApiTest extends TestCase
     public function test_cannot_show_shipment_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherShipment = Shipment::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -319,9 +317,9 @@ class ShipmentApiTest extends TestCase
     public function test_cannot_update_shipment_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherShipment = Shipment::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -337,9 +335,9 @@ class ShipmentApiTest extends TestCase
     public function test_cannot_delete_shipment_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherShipment = Shipment::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -355,9 +353,9 @@ class ShipmentApiTest extends TestCase
         Shipment::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
 
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         Shipment::factory()->count(3)->create(['tenant_id' => $otherTenant->id]);
@@ -373,6 +371,107 @@ class ShipmentApiTest extends TestCase
     // ============================================================================
     // Filtros
     // ============================================================================
+
+    public function test_create_shipment_without_origin_address_derives_from_warehouse(): void
+    {
+        $warehouse = Warehouse::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'location_address' => 'Bodega Central, Vía España, Panamá',
+        ]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Calle 50, Edificio Plaza, Panamá',
+            'package_type' => 'caja',
+            'weight_lb' => 5.0,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.origin_address', 'Bodega Central, Vía España, Panamá');
+    }
+
+    public function test_show_shipment_includes_derived_recipient_data(): void
+    {
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'full_name' => 'Juan Pérez',
+            'phone' => '+507 6000-1234',
+        ]);
+        $shipment = Shipment::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'sender_id' => $client->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.show', $shipment->id));
+
+        $response->assertOk()
+            ->assertJsonPath('data.recipient_name', 'Juan Pérez')
+            ->assertJsonPath('data.recipient_phone', '+507 6000-1234');
+    }
+
+    public function test_create_shipment_with_weight_lb_required(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Test Address',
+            'package_type' => 'caja',
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['weight_lb']);
+    }
+
+    public function test_create_shipment_with_only_weight_lb(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Test Address',
+            'package_type' => 'caja',
+            'weight_lb' => 10.0,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.weight_lb', '10.00');
+    }
+
+    public function test_create_shipment_validates_missing_sender_id(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Test Address',
+            'package_type' => 'caja',
+            'weight_lb' => 5.0,
+            'warehouse_id' => $warehouse->id,
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors(['sender_id']);
+    }
 
     public function test_filter_shipments_by_status(): void
     {
@@ -399,17 +498,25 @@ class ShipmentApiTest extends TestCase
             ->assertJsonPath('data.data.0.tracking_number', 'MAYA-SEARCH-001');
     }
 
-    public function test_search_shipments_by_recipient_name(): void
+    public function test_search_shipments_by_sender_name(): void
     {
-        Shipment::factory()->create(['tenant_id' => $this->tenant->id, 'recipient_name' => 'María García']);
+        $client = Client::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'full_name' => 'María García',
+            'first_name' => 'María',
+            'last_name' => 'García',
+        ]);
+        Shipment::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'sender_id' => $client->id,
+        ]);
         Shipment::factory()->count(3)->create(['tenant_id' => $this->tenant->id]);
 
         $response = $this->actingAs($this->gestor)
             ->getJson(route('admin.shipments.list', ['search' => 'García']));
 
         $response->assertOk()
-            ->assertJsonCount(1, 'data.data')
-            ->assertJsonPath('data.data.0.recipient_name', 'María García');
+            ->assertJsonCount(1, 'data.data');
     }
 
     // ============================================================================

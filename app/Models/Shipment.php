@@ -6,7 +6,6 @@ namespace App\Models;
 
 use App\Scopes\TenantScope;
 use App\Traits\HasTenant;
-
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,32 +18,29 @@ use Illuminate\Support\Str;
  *
  * Representa un envío desde origen hasta destino con tracking completo.
  *
- * @property string      $id                     UUID
- * @property string      $tenant_id              UUID del tenant
- * @property string|null $warehouse_id           UUID de la bodega actual
- * @property string|null $assigned_task_id       UUID de la tarea de reparto asignada
- * @property string      $tracking_number        Número de tracking único
- * @property string|null $sender_id              UUID del cliente remitente
- * @property string      $recipient_name         Nombre del destinatario
- * @property string      $recipient_phone        Teléfono del destinatario
- * @property string      $origin_address         Dirección de origen
- * @property string      $destination_address    Dirección de destino
- * @property array|null  $destination_coords     Coordenadas GPS {lat, lng}
- * @property float|null  $weight_kg              Peso en kilogramos
- * @property float|null  $weight_lb              Peso en libras
- * @property float|null  $total_cost             Costo total del envío
- * @property string|null $content_description    Descripción del contenido
- * @property string|null $package_type           Tipo: caja, sobre, palet, etc.
- * @property array|null  $dimensions             Dimensiones en cm {largo, ancho, alto}
- * @property string      $status                 Estado concreto del envío
- * @property int|null    $current_status_id      FK catálogo de estados (legado)
- * @property string|null $label_url              URL de la etiqueta
- * @property string|null $delivered_photo_url    URL de foto de evidencia de entrega
+ * @property string $id UUID
+ * @property string $tenant_id UUID del tenant
+ * @property string|null $warehouse_id UUID de la bodega actual
+ * @property string|null $driver_task UUID de la tarea de reparto asignada
+ * @property string $tracking_number Número de tracking único
+ * @property string|null $sender_id UUID del cliente remitente
+ * @property string $origin_address Dirección de origen (derivada de warehouse)
+ * @property string $destination_address Dirección de destino
+ * @property array|null $destination_coords Coordenadas GPS {lat, lng}
+ * @property float|null $weight_kg Peso en kilogramos
+ * @property float $weight_lb Peso en libras
+ * @property float|null $total_cost Costo total del envío
+ * @property string|null $content_description Descripción del contenido
+ * @property string|null $package_type Tipo: caja, sobre, palet, etc.
+ * @property array|null $dimensions Dimensiones en cm {largo, ancho, alto}
+ * @property string $status Estado concreto del envío
+ * @property string|null $label_url URL de la etiqueta
+ * @property string|null $delivered_photo_url URL de foto de evidencia de entrega
  * @property string|null $recipient_signature_url URL de firma del destinatario
- * @property \Carbon\Carbon|null $eta            Fecha estimada de entrega
- * @property \Carbon\Carbon|null $delivered_at   Fecha y hora real de entrega
- * @property \Carbon\Carbon      $created_at
- * @property \Carbon\Carbon      $updated_at
+ * @property \Carbon\Carbon|null $eta Fecha estimada de entrega
+ * @property \Carbon\Carbon|null $delivered_at Fecha y hora real de entrega
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
  */
 class Shipment extends Model
 {
@@ -96,13 +92,13 @@ class Shipment extends Model
      * @var array<string, string>
      */
     public const STATUS_LABELS = [
-        self::STATUS_PENDING      => 'Pendiente',
+        self::STATUS_PENDING => 'Pendiente',
         self::STATUS_IN_WAREHOUSE => 'En bodega',
-        self::STATUS_ASSIGNED     => 'Asignado',
-        self::STATUS_IN_TRANSIT   => 'En tránsito',
-        self::STATUS_DELIVERED    => 'Entregado',
-        self::STATUS_RETURNED     => 'Devuelto',
-        self::STATUS_FAILED       => 'Fallido',
+        self::STATUS_ASSIGNED => 'Asignado',
+        self::STATUS_IN_TRANSIT => 'En tránsito',
+        self::STATUS_DELIVERED => 'Entregado',
+        self::STATUS_RETURNED => 'Devuelto',
+        self::STATUS_FAILED => 'Fallido',
     ];
 
     // ============================================================================
@@ -133,12 +129,9 @@ class Shipment extends Model
         'id',
         'tenant_id',
         'warehouse_id',
-        'assigned_task_id',
+        'driver_task',
         'tracking_number',
         'sender_id',
-        'recipient_name',
-        'recipient_phone',
-        'origin_address',
         'destination_address',
         'destination_coords',
         'weight_kg',
@@ -148,12 +141,20 @@ class Shipment extends Model
         'package_type',
         'dimensions',
         'status',
-        'current_status_id',
         'label_url',
         'delivered_photo_url',
         'recipient_signature_url',
         'eta',
         'delivered_at',
+    ];
+
+    /**
+     * Atributos que se incluyen en la serialización.
+     *
+     * @var array<string>
+     */
+    protected $appends = [
+        'origin_address',
     ];
 
     /**
@@ -165,14 +166,14 @@ class Shipment extends Model
     {
         return [
             'destination_coords' => 'array',
-            'dimensions'         => 'array',
-            'weight_kg'          => 'decimal:2',
-            'weight_lb'          => 'decimal:2',
-            'total_cost'         => 'decimal:2',
-            'eta'                => 'datetime',
-            'delivered_at'       => 'datetime',
-            'created_at'         => 'datetime',
-            'updated_at'         => 'datetime',
+            'dimensions' => 'array',
+            'weight_kg' => 'decimal:2',
+            'weight_lb' => 'decimal:2',
+            'total_cost' => 'decimal:2',
+            'eta' => 'datetime',
+            'delivered_at' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 
@@ -201,7 +202,7 @@ class Shipment extends Model
      */
     protected static function booted(): void
     {
-        static::addGlobalScope(new TenantScope());
+        static::addGlobalScope(new TenantScope);
     }
 
     /**
@@ -209,7 +210,7 @@ class Shipment extends Model
      */
     public static function generateTrackingNumber(): string
     {
-        return 'MAYA' . strtoupper(Str::random(10));
+        return 'MAYA'.strtoupper(Str::random(10));
     }
 
     // ============================================================================
@@ -282,17 +283,9 @@ class Shipment extends Model
     /**
      * Tarea de reparto asignada al envío.
      */
-    public function assignedTask(): BelongsTo
+    public function driverTask(): BelongsTo
     {
-        return $this->belongsTo(ShipmentTask::class, 'assigned_task_id');
-    }
-
-    /**
-     * Estado del catálogo (legado - mantener por compatibilidad).
-     */
-    public function currentStatus(): BelongsTo
-    {
-        return $this->belongsTo(CatalogoValor::class, 'current_status_id');
+        return $this->belongsTo(ShipmentTask::class, 'driver_task');
     }
 
     /**
@@ -380,5 +373,17 @@ class Shipment extends Model
     public function getLastEvent(): ?TrackingEvent
     {
         return $this->trackingEvents()->first();
+    }
+
+    // ============================================================================
+    // Accessors
+    // ============================================================================
+
+    /**
+     * Obtiene la dirección de origen derivada de la bodega.
+     */
+    public function getOriginAddressAttribute(): string
+    {
+        return $this->warehouse?->location_address ?? '';
     }
 }
