@@ -1,0 +1,481 @@
+<title>Gantt Maya Q4</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    color-scheme: light;
+    --page:     #f9f9f7;
+    --surface:  #fcfcfb;
+    --ink:      #0b0b0b;
+    --ink-2:    #52514e;
+    --muted:    #898781;
+    --grid:     #e1e0d9;
+    --grid-strong: #c3c2b7;
+    --border:   rgba(11,11,11,0.10);
+
+    --s1: #2a78d6; /* Crei03 */
+    --s2: #eb6834; /* DeftDiaz */
+    --s3: #1baf7a; /* Hunter2801a */
+    --neutral: #898781; /* Equipo / buffer */
+    --critical: #d03b3b; /* marcador de hoy */
+
+    --s1-soft: #e4eefa;
+    --s2-soft: #fce7dd;
+    --s3-soft: #dff5ec;
+    --neutral-soft: #eceae5;
+
+    --shadow: 0 1px 2px rgba(11,11,11,.06), 0 10px 24px -12px rgba(11,11,11,.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:     #0d0d0d;
+      --surface:  #1a1a19;
+      --ink:      #ffffff;
+      --ink-2:    #c3c2b7;
+      --muted:    #898781;
+      --grid:     #2c2c2a;
+      --grid-strong: #383835;
+      --border:   rgba(255,255,255,0.10);
+
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --neutral: #9a9891;
+      --critical: #e66767;
+
+      --s1-soft: #1c2c3f;
+      --s2-soft: #3a2416;
+      --s3-soft: #163329;
+      --neutral-soft: #26251f;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 24px -12px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:     #0d0d0d;
+    --surface:  #1a1a19;
+    --ink:      #ffffff;
+    --ink-2:    #c3c2b7;
+    --muted:    #898781;
+    --grid:     #2c2c2a;
+    --grid-strong: #383835;
+    --border:   rgba(255,255,255,0.10);
+
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --neutral: #9a9891;
+    --critical: #e66767;
+
+    --s1-soft: #1c2c3f;
+    --s2-soft: #3a2416;
+    --s3-soft: #163329;
+    --neutral-soft: #26251f;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 24px -12px rgba(0,0,0,.55);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { background: var(--page); }
+  body {
+    color: var(--ink);
+    font-family: 'Public Sans', system-ui, sans-serif;
+    padding: clamp(16px, 3vw, 36px);
+  }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  h1 {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.4rem, 2.2vw, 1.9rem);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .subtitle { color: var(--ink-2); font-size: 0.94rem; max-width: 70ch; line-height: 1.5; margin-top: 6px; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between;
+    margin-top: 12px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  .legend-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-right: 2px; }
+  .swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 500; color: var(--ink-2); }
+  .swatch i { width: 13px; height: 13px; border-radius: 4px; display: inline-block; flex: none; }
+  .swatch.dashed i { background: transparent; border: 2px dashed var(--neutral); }
+
+  button.toggle {
+    font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 13px; cursor: pointer; box-shadow: var(--shadow);
+  }
+  button.toggle:hover { border-color: var(--grid-strong); }
+  button.toggle:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+
+  /* ---- gantt chart ---- */
+  #chart { padding: 18px 20px 20px; }
+  .axis-row { display: grid; grid-template-columns: 250px 1fr; margin-bottom: 6px; }
+  .axis-spacer {}
+  .axis-track { position: relative; height: 22px; }
+  .axis-month {
+    position: absolute; top: 0; height: 100%;
+    display: flex; align-items: flex-end; padding-bottom: 3px;
+    font-size: 0.72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); white-space: nowrap;
+  }
+
+  .chart-body { position: relative; }
+  .grid-overlay { position: absolute; left: 250px; right: 0; top: 0; bottom: 0; pointer-events: none; }
+  .grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
+  .grid-line.month { background: var(--grid-strong); }
+  .today-line { position: absolute; top: -2px; bottom: 0; width: 2px; background: var(--critical); }
+  .today-label {
+    position: absolute; top: -18px; left: 0; transform: translateX(-1px);
+    font-size: 0.68rem; font-weight: 700; color: var(--critical); font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap;
+  }
+
+  .rows { position: relative; display: flex; flex-direction: column; }
+  .phase-row {
+    display: grid; grid-template-columns: 250px 1fr;
+    padding: 14px 0 6px;
+  }
+  .phase-row:first-child { padding-top: 4px; }
+  .phase-title { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 0.88rem; }
+  .phase-range { font-size: 0.74rem; color: var(--muted); margin-top: 1px; }
+  .phase-track { border-bottom: 1px dashed var(--grid); align-self: flex-end; margin-bottom: 6px; }
+
+  .task-row {
+    display: grid; grid-template-columns: 250px 1fr;
+    align-items: center; min-height: 38px;
+  }
+  .task-row:hover { background: var(--surface); }
+  .task-label { padding-right: 14px; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+  .task-label .t-title { font-size: 0.83rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-label .t-sub { font-size: 0.7rem; color: var(--muted); }
+  .task-label .t-sub .mono { color: var(--muted); }
+
+  .task-track { position: relative; height: 26px; }
+  .bar {
+    position: absolute; top: 3px; height: 20px; border-radius: 6px;
+    cursor: pointer; transition: filter .1s ease;
+  }
+  .bar:hover, .bar:focus-visible { filter: brightness(0.92); }
+  .bar.buffer { background: transparent !important; border: 2px dashed var(--neutral); }
+  .bar-dur {
+    position: absolute; top: 50%; transform: translateY(-50%); left: calc(100% + 8px);
+    font-size: 0.68rem; color: var(--muted); white-space: nowrap; pointer-events: none;
+  }
+
+  /* tooltip */
+  #tooltip {
+    position: fixed; z-index: 20; max-width: 280px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: var(--shadow); padding: 10px 12px; font-size: 0.8rem; line-height: 1.45;
+    pointer-events: none;
+  }
+  #tooltip .tt-id { font-family: 'IBM Plex Mono', monospace; color: var(--muted); font-size: 0.72rem; }
+  #tooltip .tt-title { font-weight: 600; margin: 2px 0 6px; }
+  #tooltip .tt-row { display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 0.76rem; }
+  #tooltip .tt-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+  /* table view */
+  #tableview { padding: 4px 4px 4px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th {
+    text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); font-weight: 600; padding: 10px 16px; border-bottom: 1px solid var(--grid-strong);
+  }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+  .who-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 500;
+  }
+  .who-chip i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+  footer.notes {
+    font-size: 0.82rem; color: var(--ink-2); line-height: 1.6; max-width: 90ch;
+  }
+  footer.notes strong { color: var(--ink); }
+
+  @media (max-width: 720px) {
+    .axis-row, .phase-row, .task-row { grid-template-columns: 150px 1fr; }
+    .task-label .t-title { font-size: 0.78rem; }
+    .bar-dur { display: none; }
+  }
+</style>
+
+<div class="wrap">
+  <div>
+    <h1>Ruta Maya Q4 2026 — vista Gantt</h1>
+    <p class="subtitle">Mismo plan del kanban, mostrado como línea de tiempo: 3 de septiembre al 15 de diciembre. Las barras usan fechas reales según dependencias entre issues; el color identifica a quién le corresponde cada tarea.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="legend">
+      <span class="legend-label">Responsable</span>
+      <span class="swatch"><i style="background:var(--s1)"></i>Crei03</span>
+      <span class="swatch"><i style="background:var(--s2)"></i>DeftDiaz</span>
+      <span class="swatch"><i style="background:var(--s3)"></i>Hunter2801a</span>
+      <span class="swatch dashed"><i></i>Equipo (colchón/QA)</span>
+    </div>
+    <button class="toggle" id="viewToggle" type="button" aria-pressed="false">Ver como tabla</button>
+  </div>
+
+  <div class="panel" id="chart"></div>
+  <div class="panel" id="tableview" hidden></div>
+
+  <footer class="notes">
+    <strong>Cómo leerlo:</strong> cada fila es un issue (o un bloque de colchón/QA para el equipo); la línea roja marca "hoy" (1 sep). Pasa el cursor sobre una barra para ver fechas exactas y duración. El bloque de diciembre se ve más corto a propósito — el mes solo llega hasta el día 15.
+  </footer>
+</div>
+
+<div id="tooltip" hidden></div>
+
+<script>
+(function () {
+  const DAY = 86400000;
+  const RANGE_START = new Date(2026, 8, 1);   // 1 sep 2026
+  const RANGE_END   = new Date(2026, 11, 16); // 16 dic 2026 (exclusivo)
+  const TOTAL_DAYS  = (RANGE_END - RANGE_START) / DAY;
+  const TODAY       = new Date(2026, 8, 1);
+
+  const MONTHS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  function fmt(d) { return d.getDate() + ' ' + MONTHS[d.getMonth()]; }
+  function pct(d) { return (d - RANGE_START) / DAY / TOTAL_DAYS * 100; }
+  function addDays(d, n) { return new Date(d.getTime() + n * DAY); }
+
+  const PEOPLE = {
+    crei: { name: 'Crei03',      css: '--s1',  soft: '--s1-soft' },
+    deft: { name: 'DeftDiaz',    css: '--s2',  soft: '--s2-soft' },
+    hunt: { name: 'Hunter2801a', css: '--s3',  soft: '--s3-soft' },
+    team: { name: 'Equipo',      css: '--neutral', soft: '--neutral-soft', buffer: true },
+  };
+
+  const PHASES = [
+    {
+      id: 'f1', title: 'Fase 1 · Cimientos', tasks: [
+        { id: '3', title: 'Refactor Shipment (Fase 2)', who: 'crei', start: '2026-09-03', end: '2026-09-13' },
+      ]
+    },
+    {
+      id: 'f2', title: 'Fase 2 · Backend en paralelo', tasks: [
+        { id: '11', title: 'API Tareas de Conductores', who: 'crei', start: '2026-09-15', end: '2026-09-26' },
+        { id: '4',  title: 'API Gestión de Paquetes', who: 'deft', start: '2026-09-15', end: '2026-09-27' },
+        { id: '13', title: 'Estados de paquete y retorno', who: 'hunt', start: '2026-09-15', end: '2026-09-30' },
+        { id: '16', title: 'Dashboard mejorado', who: 'crei', start: '2026-09-28', end: '2026-10-10' },
+        { id: '17', title: 'Notificaciones Email — parte 1', who: 'deft', start: '2026-09-29', end: '2026-10-24' },
+      ]
+    },
+    {
+      id: 'f3', title: 'Fase 3 · Frontend e integración', tasks: [
+        { id: '12', title: 'Frontend Tareas de Conductores', who: 'hunt', start: '2026-10-05', end: '2026-10-24' },
+        { id: '5',  title: 'Frontend Gestión de Paquetes', who: 'crei', start: '2026-10-12', end: '2026-10-24' },
+        { id: '14', title: 'Blog CMS', who: 'crei', start: '2026-10-26', end: '2026-11-07' },
+        { id: '17', title: 'Notificaciones Email — parte 2', who: 'deft', start: '2026-10-26', end: '2026-11-14' },
+      ]
+    },
+    {
+      id: 'f4', title: 'Fase 4 · Cierre y estabilización', tasks: [
+        { id: '15', title: 'Cleanup Manifest obsoleto', who: 'deft', start: '2026-11-16', end: '2026-11-21' },
+        { id: 'qa', title: 'QA y estabilización', who: 'team', start: '2026-10-26', end: '2026-12-12' },
+        { id: 'fin', title: 'Colchón final y entrega', who: 'team', start: '2026-12-12', end: '2026-12-16' },
+      ]
+    },
+  ];
+
+  // ---- build month/week gridlines + axis labels ----
+  const monthBounds = [];
+  let cursor = new Date(RANGE_START);
+  while (cursor < RANGE_END) {
+    monthBounds.push(new Date(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  monthBounds.push(new Date(RANGE_END));
+
+  const weekLines = [];
+  for (let d = new Date(RANGE_START); d < RANGE_END; d = addDays(d, 7)) weekLines.push(new Date(d));
+
+  const axisTrack = document.createElement('div');
+  axisTrack.className = 'axis-track';
+  for (let i = 0; i < monthBounds.length - 1; i++) {
+    const start = monthBounds[i], end = monthBounds[i + 1];
+    const left = pct(start), width = pct(end) - pct(start);
+    const label = document.createElement('div');
+    label.className = 'axis-month';
+    label.style.left = left + '%';
+    label.style.width = width + '%';
+    label.textContent = MONTHS[start.getMonth()];
+    axisTrack.appendChild(label);
+  }
+
+  const gridOverlay = document.createElement('div');
+  gridOverlay.className = 'grid-overlay';
+  weekLines.forEach(function (d) {
+    const line = document.createElement('div');
+    line.className = 'grid-line';
+    line.style.left = pct(d) + '%';
+    gridOverlay.appendChild(line);
+  });
+  monthBounds.forEach(function (d) {
+    const line = document.createElement('div');
+    line.className = 'grid-line month';
+    line.style.left = pct(d) + '%';
+    gridOverlay.appendChild(line);
+  });
+  const todayLine = document.createElement('div');
+  todayLine.className = 'today-line';
+  todayLine.style.left = pct(TODAY) + '%';
+  const todayLabel = document.createElement('div');
+  todayLabel.className = 'today-label';
+  todayLabel.style.left = pct(TODAY) + '%';
+  todayLabel.textContent = 'HOY · ' + fmt(TODAY);
+  gridOverlay.appendChild(todayLine);
+  gridOverlay.appendChild(todayLabel);
+
+  // ---- build rows ----
+  const rows = document.createElement('div');
+  rows.className = 'rows';
+
+  const tooltip = document.getElementById('tooltip');
+
+  PHASES.forEach(function (phase) {
+    const first = phase.tasks[0], last = phase.tasks[phase.tasks.length - 1];
+    let minStart = new Date(first.start), maxEnd = new Date(first.end);
+    phase.tasks.forEach(function (t) {
+      const s = new Date(t.start), e = new Date(t.end);
+      if (s < minStart) minStart = s;
+      if (e > maxEnd) maxEnd = e;
+    });
+
+    const pRow = document.createElement('div');
+    pRow.className = 'phase-row';
+    const pLabel = document.createElement('div');
+    pLabel.innerHTML = '<div class="phase-title">' + phase.title + '</div>' +
+      '<div class="phase-range mono">' + fmt(minStart) + ' – ' + fmt(addDays(maxEnd, -1)) + '</div>';
+    const pTrack = document.createElement('div');
+    pTrack.className = 'phase-track';
+    pRow.appendChild(pLabel);
+    pRow.appendChild(pTrack);
+    rows.appendChild(pRow);
+
+    phase.tasks.forEach(function (t) {
+      const person = PEOPLE[t.who];
+      const s = new Date(t.start), e = new Date(t.end);
+      const durDays = Math.round((e - s) / DAY);
+
+      const row = document.createElement('div');
+      row.className = 'task-row';
+
+      const label = document.createElement('div');
+      label.className = 'task-label';
+      label.innerHTML = '<span class="t-title">' + (t.id.match(/^\d/) ? '#' + t.id + ' ' : '') + t.title + '</span>' +
+        '<span class="t-sub"><span class="mono">' + fmt(s) + '–' + fmt(addDays(e, -1)) + '</span> · ' + person.name + '</span>';
+
+      const track = document.createElement('div');
+      track.className = 'task-track';
+
+      const bar = document.createElement('div');
+      bar.className = 'bar' + (person.buffer ? ' buffer' : '');
+      bar.style.left = pct(s) + '%';
+      bar.style.width = Math.max(pct(e) - pct(s), 0.6) + '%';
+      if (!person.buffer) bar.style.background = 'var(' + person.css + ')';
+      bar.tabIndex = 0;
+
+      const dur = document.createElement('span');
+      dur.className = 'bar-dur mono';
+      dur.textContent = durDays + 'd';
+      bar.appendChild(dur);
+
+      function showTip(evt) {
+        tooltip.innerHTML = '<div class="tt-id">' + (t.id.match(/^\d/) ? '#' + t.id : t.title.toUpperCase()) + '</div>' +
+          '<div class="tt-title">' + t.title + '</div>' +
+          '<div class="tt-row"><span class="tt-dot" style="background:' + (person.buffer ? 'transparent' : 'var(' + person.css + ')') + (person.buffer ? ';border:2px dashed var(--neutral)' : '') + '"></span>' + person.name + '</div>' +
+          '<div class="tt-row mono">' + fmt(s) + ' → ' + fmt(addDays(e, -1)) + ' · ' + durDays + ' días</div>';
+        tooltip.hidden = false;
+        positionTip(evt);
+      }
+      function positionTip(evt) {
+        const pad = 14;
+        let x = evt.clientX + pad, y = evt.clientY + pad;
+        const rect = tooltip.getBoundingClientRect();
+        if (x + rect.width > window.innerWidth - 8) x = evt.clientX - rect.width - pad;
+        if (y + rect.height > window.innerHeight - 8) y = evt.clientY - rect.height - pad;
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
+      }
+      bar.addEventListener('mouseenter', showTip);
+      bar.addEventListener('mousemove', positionTip);
+      bar.addEventListener('mouseleave', function () { tooltip.hidden = true; });
+      bar.addEventListener('focus', function (e) { showTip({ clientX: bar.getBoundingClientRect().left, clientY: bar.getBoundingClientRect().top }); });
+      bar.addEventListener('blur', function () { tooltip.hidden = true; });
+
+      track.appendChild(bar);
+      row.appendChild(label);
+      row.appendChild(track);
+      rows.appendChild(row);
+    });
+  });
+
+  const chart = document.getElementById('chart');
+  const axisRow = document.createElement('div');
+  axisRow.className = 'axis-row';
+  const axisSpacer = document.createElement('div');
+  axisSpacer.className = 'axis-spacer';
+  axisRow.appendChild(axisSpacer);
+  axisRow.appendChild(axisTrack);
+
+  const chartBody = document.createElement('div');
+  chartBody.className = 'chart-body';
+  chartBody.appendChild(gridOverlay);
+  chartBody.appendChild(rows);
+
+  chart.appendChild(axisRow);
+  chart.appendChild(chartBody);
+
+  // ---- table view (accessible fallback) ----
+  const tableWrap = document.getElementById('tableview');
+  const table = document.createElement('table');
+  table.innerHTML = '<thead><tr><th>Fase</th><th class="num">#</th><th>Tarea</th><th>Responsable</th><th class="num">Inicio</th><th class="num">Fin</th><th class="num">Duración</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  PHASES.forEach(function (phase) {
+    phase.tasks.forEach(function (t) {
+      const person = PEOPLE[t.who];
+      const s = new Date(t.start), e = new Date(t.end);
+      const durDays = Math.round((e - s) / DAY);
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + phase.title.replace(/^Fase \d+ · /, '') + '</td>' +
+        '<td class="num">' + (t.id.match(/^\d/) ? '#' + t.id : '—') + '</td>' +
+        '<td>' + t.title + '</td>' +
+        '<td><span class="who-chip"><i style="background:' + (person.buffer ? 'transparent' : 'var(' + person.css + ')') + (person.buffer ? ';border:2px dashed var(--neutral)' : '') + '"></i>' + person.name + '</span></td>' +
+        '<td class="num">' + fmt(s) + '</td>' +
+        '<td class="num">' + fmt(addDays(e, -1)) + '</td>' +
+        '<td class="num">' + durDays + ' días</td>';
+      tbody.appendChild(tr);
+    });
+  });
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+
+  const btn = document.getElementById('viewToggle');
+  btn.addEventListener('click', function () {
+    const showingTable = !tableWrap.hidden;
+    tableWrap.hidden = showingTable;
+    chart.hidden = !showingTable;
+    btn.textContent = showingTable ? 'Ver como tabla' : 'Ver como Gantt';
+    btn.setAttribute('aria-pressed', String(!showingTable));
+  });
+})();
+</script>
