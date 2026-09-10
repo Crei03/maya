@@ -19,12 +19,12 @@ class ShipmentTaskFactory extends Factory
     public function definition(): array
     {
         return [
-            'id'                  => $this->faker->uuid(),
-            'title'               => $this->faker->sentence(3),
-            'driver_id'           => User::factory(),
+            'id' => $this->faker->uuid(),
+            'title' => $this->faker->sentence(3),
+            'driver_id' => User::factory(),
             'origin_warehouse_id' => Warehouse::factory(),
-            'start_date'          => now(),
-            'status'              => 'pending',
+            'start_date' => now(),
+            'status' => 'pending',
         ];
     }
 

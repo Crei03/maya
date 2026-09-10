@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Traits\HasTenant;
-
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,6 +71,8 @@ class ShipmentTask extends Model
     {
         parent::boot();
 
+        static::addGlobalScope(new \App\Scopes\TenantScope);
+
         static::creating(function (self $task): void {
             if (empty($task->id)) {
                 $task->id = (string) Str::uuid();
@@ -129,19 +130,44 @@ class ShipmentTask extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(ShipmentTaskItem::class, 'shipment_task_id')->orderBy('created_at');
+        return $this->hasMany(ShipmentTaskItem::class, 'shipment_task_id')->orderBy('stop_order')->orderBy('created_at');
     }
 
     public function shipments(): BelongsToMany
     {
         return $this->belongsToMany(Shipment::class, 'shipment_task_items', 'shipment_task_id', 'shipment_id')
-            ->withPivot('status', 'delivered_at', 'return_reason')
+            ->withPivot('status', 'priority', 'stop_order', 'delivered_at', 'return_reason')
             ->withTimestamps();
     }
 
     // ============================================================================
     // Helpers
     // ============================================================================
+
+    /**
+     * Genera un código secuencial con formato PLE-YYYY-MM-XXXX único por tenant y mes.
+     */
+    public static function generateTaskCode(?string $tenantId = null): string
+    {
+        $prefix = 'PLE';
+        $year = date('Y');
+        $month = date('m');
+        $pattern = "{$prefix}-{$year}-{$month}-%";
+
+        $query = static::withoutGlobalScopes()->where('title', 'like', $pattern);
+        if ($tenantId) {
+            $query->where('tenant_id', $tenantId);
+        }
+
+        $lastTask = $query->orderBy('title', 'desc')->first();
+
+        $nextSequence = 1;
+        if ($lastTask && preg_match('/-(\d{4})$/', $lastTask->title, $matches)) {
+            $nextSequence = ((int) $matches[1]) + 1;
+        }
+
+        return sprintf('%s-%s-%s-%04d', $prefix, $year, $month, $nextSequence);
+    }
 
     public function totalItems(): int
     {

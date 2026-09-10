@@ -1,15 +1,16 @@
 <?php
 
 use App\Http\Controllers\Admin\CatalogoController;
-use App\Http\Controllers\Admin\DriverController;
-use App\Http\Controllers\Admin\KPIController;
 use App\Http\Controllers\Admin\ClientController;
 use App\Http\Controllers\Admin\ColumnPreferenceController;
+use App\Http\Controllers\Admin\DriverController;
+use App\Http\Controllers\Admin\KPIController;
 use App\Http\Controllers\Admin\ManifestController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\ShipmentController;
+use App\Http\Controllers\Admin\ShipmentTaskController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\Admin\VehicleController;
-use App\Http\Controllers\Admin\ShipmentController;
 use App\Http\Controllers\Admin\WarehouseController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -28,174 +29,208 @@ use Inertia\Inertia;
 Route::middleware(['auth', 'tenant', 'gestor'])
     ->group(function () {
         // Dashboard de KPIs
-Route::get('/dashboard', [KPIController::class, 'dashboard'])
-    ->name('admin.dashboard');
+        Route::get('/dashboard', [KPIController::class, 'dashboard'])
+            ->name('admin.dashboard');
 
-// Conciliación de Cierre
-Route::get('/conciliacion-cierre', function () {
-    return Inertia::render('Admin/ConciliacionCierre');
-})->name('admin.conciliacion-cierre');
+        // Conciliación de Cierre
+        Route::get('/conciliacion-cierre', function () {
+            return Inertia::render('Admin/ConciliacionCierre');
+        })->name('admin.conciliacion-cierre');
 
-// Versión Mobile de Conciliación
-Route::get('/conciliacion-cierre/mobile', function () {
-    return Inertia::render('Admin/ConciliacionCierre/Mobile');
-})->name('admin.conciliacion-cierre.mobile');
+        // Versión Mobile de Conciliación
+        Route::get('/conciliacion-cierre/mobile', function () {
+            return Inertia::render('Admin/ConciliacionCierre/Mobile');
+        })->name('admin.conciliacion-cierre.mobile');
 
-// Asignación de Transporte (Manifiestos)
-Route::get('/asignacion-transporte', [ManifestController::class, 'index'])
-    ->name('admin.asignacion-transporte');
+        // Asignación de Transporte (Manifiestos)
+        Route::get('/asignacion-transporte', [ManifestController::class, 'index'])
+            ->name('admin.asignacion-transporte');
 
-// Configuración Admin
-Route::get('/configuracion', [SettingsController::class, 'index'])
-    ->name('admin.configuracion');
+        // Planes de Entrega (Rutas con Wizard)
+        Route::get('/planes-entrega', [ShipmentTaskController::class, 'page'])
+            ->name('admin.planes-entrega');
+        Route::get('/tareas-conductores', [ShipmentTaskController::class, 'page'])
+            ->name('admin.tareas-conductores');
 
-Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
-    ->name('admin.configuracion.clientes');
+        // Gestión de Envíos / Paquetes
+        Route::get('/paquetes', [ShipmentController::class, 'page'])
+            ->name('admin.paquetes');
 
-Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
-    ->name('admin.configuracion.usuarios');
+        // Configuración Admin
+        Route::get('/configuracion', [SettingsController::class, 'index'])
+            ->name('admin.configuracion');
 
-Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
-    ->name('admin.configuracion.transportes');
+        Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
+            ->name('admin.configuracion.clientes');
 
-Route::get('/configuracion/bodegas', [WarehouseController::class, 'page'])
-    ->name('admin.configuracion.bodegas');
+        Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
+            ->name('admin.configuracion.usuarios');
 
-Route::get('/configuracion/conductores', [SettingsController::class, 'drivers'])
-    ->name('admin.configuracion.conductores');
+        Route::get('/configuracion/transportes', [VehicleController::class, 'page'])
+            ->name('admin.configuracion.transportes');
 
-Route::get('/configuracion/catalogos', [SettingsController::class, 'catalogos'])
-    ->name('admin.configuracion.catalogos');
+        Route::get('/configuracion/bodegas', [WarehouseController::class, 'page'])
+            ->name('admin.configuracion.bodegas');
 
-Route::prefix('api/catalogos')->name('admin.configuracion.catalogos.')->group(function () {
-    Route::get('/', [CatalogoController::class, 'index'])->name('index');
-    Route::get('{slug}', [CatalogoController::class, 'show'])->name('show');
-    Route::post('valores', [CatalogoController::class, 'store'])->name('valores.store');
-    Route::put('valores/{id}', [CatalogoController::class, 'update'])->name('valores.update');
-    Route::delete('valores/{id}', [CatalogoController::class, 'destroy'])->name('valores.destroy');
-});
+        Route::get('/configuracion/conductores', [SettingsController::class, 'drivers'])
+            ->name('admin.configuracion.conductores');
 
-// Versión Mobile de Asignación de Transporte
-Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
-    ->name('admin.asignacion-transporte.mobile');
+        Route::get('/configuracion/catalogos', [SettingsController::class, 'catalogos'])
+            ->name('admin.configuracion.catalogos');
 
-// API endpoints para Manifiestos
-Route::prefix('api/manifests')->group(function () {
-    Route::get('/', [ManifestController::class, 'list'])
-        ->name('admin.manifests.list');
-    Route::post('/', [ManifestController::class, 'store'])
-        ->name('admin.manifests.store');
-    Route::get('/{id}', [ManifestController::class, 'show'])
-        ->name('admin.manifests.show');
-    Route::post('/{id}/iniciar-despacho', [ManifestController::class, 'iniciarDespacho'])
-        ->name('admin.manifests.iniciar-despacho');
-});
+        Route::prefix('api/catalogos')->name('admin.configuracion.catalogos.')->group(function () {
+            Route::get('/', [CatalogoController::class, 'index'])->name('index');
+            Route::get('{slug}', [CatalogoController::class, 'show'])->name('show');
+            Route::post('valores', [CatalogoController::class, 'store'])->name('valores.store');
+            Route::put('valores/{id}', [CatalogoController::class, 'update'])->name('valores.update');
+            Route::delete('valores/{id}', [CatalogoController::class, 'destroy'])->name('valores.destroy');
+        });
 
-// API endpoints para KPIs
-Route::prefix('api')->group(function () {
-    Route::get('/kpis', [KPIController::class, 'index'])
-        ->name('admin.kpis.index');
+        // Versión Mobile de Asignación de Transporte
+        Route::get('/asignacion-transporte/mobile', [ManifestController::class, 'mobile'])
+            ->name('admin.asignacion-transporte.mobile');
 
-    Route::get('/kpis/delivery-rate', [KPIController::class, 'deliveryRate'])
-        ->name('admin.kpis.delivery-rate');
+        // API endpoints para Manifiestos
+        Route::prefix('api/manifests')->group(function () {
+            Route::get('/', [ManifestController::class, 'list'])
+                ->name('admin.manifests.list');
+            Route::post('/', [ManifestController::class, 'store'])
+                ->name('admin.manifests.store');
+            Route::get('/{id}', [ManifestController::class, 'show'])
+                ->name('admin.manifests.show');
+            Route::post('/{id}/iniciar-despacho', [ManifestController::class, 'iniciarDespacho'])
+                ->name('admin.manifests.iniciar-despacho');
+        });
 
-    Route::get('/kpis/satisfaction', [KPIController::class, 'satisfaction'])
-        ->name('admin.kpis.satisfaction');
+        // API endpoints para KPIs
+        Route::prefix('api')->group(function () {
+            Route::get('/kpis', [KPIController::class, 'index'])
+                ->name('admin.kpis.index');
 
-    Route::get('/kpis/by-messenger', [KPIController::class, 'byMessenger'])
-        ->name('admin.kpis.by-messenger');
+            Route::get('/kpis/delivery-rate', [KPIController::class, 'deliveryRate'])
+                ->name('admin.kpis.delivery-rate');
 
-    Route::get('/clients', [ClientController::class, 'list'])
-        ->name('admin.clients.list');
+            Route::get('/kpis/satisfaction', [KPIController::class, 'satisfaction'])
+                ->name('admin.kpis.satisfaction');
 
-    Route::get('/clients/{id}', [ClientController::class, 'show'])
-        ->name('admin.clients.show');
+            Route::get('/kpis/by-messenger', [KPIController::class, 'byMessenger'])
+                ->name('admin.kpis.by-messenger');
 
-    Route::post('/clients', [ClientController::class, 'store'])
-        ->name('admin.clients.store');
+            Route::get('/clients', [ClientController::class, 'list'])
+                ->name('admin.clients.list');
 
-    Route::patch('/clients/{id}', [ClientController::class, 'update'])
-        ->name('admin.clients.update');
+            Route::get('/clients/{id}', [ClientController::class, 'show'])
+                ->name('admin.clients.show');
 
-    Route::delete('/clients/{id}', [ClientController::class, 'destroy'])
-        ->name('admin.clients.destroy');
+            Route::post('/clients', [ClientController::class, 'store'])
+                ->name('admin.clients.store');
 
-    Route::get('/users/all', [UsersController::class, 'listAll'])
-        ->name('admin.users.all');
+            Route::patch('/clients/{id}', [ClientController::class, 'update'])
+                ->name('admin.clients.update');
 
-    Route::get('/users', [UsersController::class, 'list'])
-        ->name('admin.users.list');
+            Route::delete('/clients/{id}', [ClientController::class, 'destroy'])
+                ->name('admin.clients.destroy');
 
-    Route::get('/users/{id}', [UsersController::class, 'show'])
-        ->name('admin.users.show');
+            Route::get('/users/all', [UsersController::class, 'listAll'])
+                ->name('admin.users.all');
 
-    Route::post('/users', [UsersController::class, 'store'])
-        ->name('admin.users.store');
+            Route::get('/users', [UsersController::class, 'list'])
+                ->name('admin.users.list');
 
-    Route::patch('/users/{id}', [UsersController::class, 'update'])
-        ->name('admin.users.update');
+            Route::get('/users/{id}', [UsersController::class, 'show'])
+                ->name('admin.users.show');
 
-    Route::delete('/users/{id}', [UsersController::class, 'destroy'])
-        ->name('admin.users.destroy');
+            Route::post('/users', [UsersController::class, 'store'])
+                ->name('admin.users.store');
 
-    Route::get('/catalogos/{slug}/valores', [ClientController::class, 'catalogValues'])
-        ->name('admin.catalogos.valores');
+            Route::patch('/users/{id}', [UsersController::class, 'update'])
+                ->name('admin.users.update');
 
-    Route::get('/catalogos/pa/hierarchy', [ClientController::class, 'paHierarchy'])
-        ->name('admin.catalogos.pa.hierarchy');
+            Route::delete('/users/{id}', [UsersController::class, 'destroy'])
+                ->name('admin.users.destroy');
 
-    Route::get('/column-preferences/{module}', [ColumnPreferenceController::class, 'show'])
-        ->name('admin.column-preferences.show');
+            Route::get('/catalogos/{slug}/valores', [ClientController::class, 'catalogValues'])
+                ->name('admin.catalogos.valores');
 
-    Route::put('/column-preferences/{module}', [ColumnPreferenceController::class, 'update'])
-        ->name('admin.column-preferences.update');
+            Route::get('/catalogos/pa/hierarchy', [ClientController::class, 'paHierarchy'])
+                ->name('admin.catalogos.pa.hierarchy');
 
-    // Vehículos / Transportes
-    Route::get('/vehicles', [VehicleController::class, 'list'])
-        ->name('admin.vehicles.list');
-    Route::post('/vehicles', [VehicleController::class, 'store'])
-        ->name('admin.vehicles.store');
-    Route::get('/vehicles/{vehicle}', [VehicleController::class, 'show'])
-        ->name('admin.vehicles.show');
-    Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update'])
-        ->name('admin.vehicles.update');
-    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
-        ->name('admin.vehicles.destroy');
+            Route::get('/column-preferences/{module}', [ColumnPreferenceController::class, 'show'])
+                ->name('admin.column-preferences.show');
 
-    // Bodegas / Warehouses
-    Route::get('/bodegas', [WarehouseController::class, 'list'])
-        ->name('admin.bodegas.list');
-    Route::post('/bodegas', [WarehouseController::class, 'store'])
-        ->name('admin.bodegas.store');
-    Route::get('/bodegas/{warehouse}', [WarehouseController::class, 'show'])
-        ->name('admin.bodegas.show');
-    Route::patch('/bodegas/{warehouse}', [WarehouseController::class, 'update'])
-        ->name('admin.bodegas.update');
-    Route::delete('/bodegas/{warehouse}', [WarehouseController::class, 'destroy'])
-        ->name('admin.bodegas.destroy');
+            Route::put('/column-preferences/{module}', [ColumnPreferenceController::class, 'update'])
+                ->name('admin.column-preferences.update');
 
-    // Conductores
-    Route::get('/drivers', [DriverController::class, 'list'])
-        ->name('admin.drivers.list');
-    Route::post('/drivers', [DriverController::class, 'store'])
-        ->name('admin.drivers.store');
-    Route::get('/drivers/{driver}', [DriverController::class, 'show'])
-        ->name('admin.drivers.show');
-    Route::patch('/drivers/{driver}', [DriverController::class, 'update'])
-        ->name('admin.drivers.update');
-    Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])
-        ->name('admin.drivers.destroy');
+            // Vehículos / Transportes
+            Route::get('/vehicles', [VehicleController::class, 'list'])
+                ->name('admin.vehicles.list');
+            Route::post('/vehicles', [VehicleController::class, 'store'])
+                ->name('admin.vehicles.store');
+            Route::get('/vehicles/{vehicle}', [VehicleController::class, 'show'])
+                ->name('admin.vehicles.show');
+            Route::patch('/vehicles/{vehicle}', [VehicleController::class, 'update'])
+                ->name('admin.vehicles.update');
+            Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
+                ->name('admin.vehicles.destroy');
 
-    // Envíos / Shipments
-    Route::get('/shipments', [ShipmentController::class, 'list'])
-        ->name('admin.shipments.list');
-    Route::post('/shipments', [ShipmentController::class, 'store'])
-        ->name('admin.shipments.store');
-    Route::get('/shipments/{id}', [ShipmentController::class, 'show'])
-        ->name('admin.shipments.show');
-    Route::patch('/shipments/{id}', [ShipmentController::class, 'update'])
-        ->name('admin.shipments.update');
-    Route::delete('/shipments/{id}', [ShipmentController::class, 'destroy'])
-        ->name('admin.shipments.destroy');
-});
-});
+            // Bodegas / Warehouses
+            Route::get('/bodegas', [WarehouseController::class, 'list'])
+                ->name('admin.bodegas.list');
+            Route::post('/bodegas', [WarehouseController::class, 'store'])
+                ->name('admin.bodegas.store');
+            Route::get('/bodegas/{warehouse}', [WarehouseController::class, 'show'])
+                ->name('admin.bodegas.show');
+            Route::patch('/bodegas/{warehouse}', [WarehouseController::class, 'update'])
+                ->name('admin.bodegas.update');
+            Route::delete('/bodegas/{warehouse}', [WarehouseController::class, 'destroy'])
+                ->name('admin.bodegas.destroy');
+
+            // Conductores
+            Route::get('/drivers', [DriverController::class, 'list'])
+                ->name('admin.drivers.list');
+            Route::post('/drivers', [DriverController::class, 'store'])
+                ->name('admin.drivers.store');
+            Route::get('/drivers/{driver}', [DriverController::class, 'show'])
+                ->name('admin.drivers.show');
+            Route::patch('/drivers/{driver}', [DriverController::class, 'update'])
+                ->name('admin.drivers.update');
+            Route::delete('/drivers/{driver}', [DriverController::class, 'destroy'])
+                ->name('admin.drivers.destroy');
+
+            // Envíos / Shipments
+            Route::get('/shipments', [ShipmentController::class, 'list'])
+                ->name('admin.shipments.list');
+            Route::post('/shipments', [ShipmentController::class, 'store'])
+                ->name('admin.shipments.store');
+            Route::get('/shipments/{id}', [ShipmentController::class, 'show'])
+                ->name('admin.shipments.show');
+            Route::patch('/shipments/{id}', [ShipmentController::class, 'update'])
+                ->name('admin.shipments.update');
+            Route::delete('/shipments/{id}', [ShipmentController::class, 'destroy'])
+                ->name('admin.shipments.destroy');
+
+            // Planes de Entrega / Tareas de Conductores
+            Route::get('/shipment-tasks', [ShipmentTaskController::class, 'list'])
+                ->name('admin.shipment-tasks.list');
+            Route::get('/shipment-tasks/next-code', [ShipmentTaskController::class, 'nextCode'])
+                ->name('admin.shipment-tasks.next-code');
+            Route::post('/shipment-tasks', [ShipmentTaskController::class, 'store'])
+                ->name('admin.shipment-tasks.store');
+            Route::get('/shipment-tasks/{id}', [ShipmentTaskController::class, 'show'])
+                ->name('admin.shipment-tasks.show');
+            Route::patch('/shipment-tasks/{id}/reorder', [ShipmentTaskController::class, 'reorder'])
+                ->name('admin.shipment-tasks.reorder');
+            Route::post('/shipment-tasks/{id}/start', [ShipmentTaskController::class, 'start'])
+                ->name('admin.shipment-tasks.start');
+            Route::post('/shipment-tasks/{id}/complete', [ShipmentTaskController::class, 'complete'])
+                ->name('admin.shipment-tasks.complete');
+            Route::post('/shipment-tasks/{id}/cancel', [ShipmentTaskController::class, 'cancel'])
+                ->name('admin.shipment-tasks.cancel');
+            Route::patch('/shipment-tasks/{id}/items/{itemId}', [ShipmentTaskController::class, 'updateItemStatus'])
+                ->name('admin.shipment-tasks.update-item');
+            Route::post('/shipment-tasks/{id}/assign', [ShipmentTaskController::class, 'assign'])
+                ->name('admin.shipment-tasks.assign');
+            Route::post('/shipment-tasks/{id}/unassign', [ShipmentTaskController::class, 'unassign'])
+                ->name('admin.shipment-tasks.unassign');
+        });
+    });
