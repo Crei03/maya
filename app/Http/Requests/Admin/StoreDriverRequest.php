@@ -16,14 +16,14 @@ class StoreDriverRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id'           => ['required', 'string', 'exists:users,id'],
-            'phone'             => ['nullable', 'string', 'max:30'],
-            'license_number'    => ['nullable', 'string', 'max:50'],
-            'license_expiry'    => ['nullable', 'date'],
+            'user_id' => ['required', 'exists:users,id'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'license_number' => ['nullable', 'string', 'max:50'],
+            'license_expiry' => ['nullable', 'date'],
             'emergency_contact' => ['nullable', 'string', 'max:120'],
-            'emergency_phone'   => ['nullable', 'string', 'max:30'],
-            'is_available'      => ['nullable', 'boolean'],
-            'status'            => ['nullable', 'boolean'],
+            'emergency_phone' => ['nullable', 'string', 'max:30'],
+            'is_available' => ['nullable', 'boolean'],
+            'status' => ['nullable', 'boolean'],
         ];
     }
 
@@ -31,18 +31,18 @@ class StoreDriverRequest extends FormRequest
     {
         return [
             'user_id.required' => 'Debes seleccionar un usuario.',
-            'user_id.exists'   => 'El usuario seleccionado no existe.',
+            'user_id.exists' => 'El usuario seleccionado no existe.',
         ];
     }
 
     public function attributes(): array
     {
         return [
-            'phone'             => 'teléfono',
-            'license_number'    => 'número de licencia',
-            'license_expiry'    => 'vencimiento de licencia',
+            'phone' => 'teléfono',
+            'license_number' => 'número de licencia',
+            'license_expiry' => 'vencimiento de licencia',
             'emergency_contact' => 'contacto de emergencia',
-            'emergency_phone'   => 'teléfono de emergencia',
+            'emergency_phone' => 'teléfono de emergencia',
         ];
     }
 }

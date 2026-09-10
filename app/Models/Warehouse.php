@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Traits\HasTenant;
-
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,6 +50,8 @@ class Warehouse extends Model
     protected static function boot(): void
     {
         parent::boot();
+
+        static::addGlobalScope(new \App\Scopes\TenantScope);
 
         static::creating(function (self $warehouse): void {
             if (empty($warehouse->id)) {

@@ -20,7 +20,7 @@ class DriverApiTest extends TestCase
         parent::setUp();
 
         $this->gestor = User::factory()->create([
-            'role'   => User::ROLE_GESTOR,
+            'role' => User::ROLE_GESTOR,
             'status' => true,
         ]);
     }
@@ -33,16 +33,16 @@ class DriverApiTest extends TestCase
     {
         // Arrange
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Juan Conductor',
+            'name' => 'Juan Conductor',
         ]);
         DriverProfile::factory()->create(['user_id' => $messenger->id]);
 
         User::factory()->create([
-            'role'   => User::ROLE_GESTOR,
+            'role' => User::ROLE_GESTOR,
             'status' => true,
-            'name'   => 'Admin User',
+            'name' => 'Admin User',
         ]);
 
         // Act
@@ -59,7 +59,7 @@ class DriverApiTest extends TestCase
     public function test_list_drivers_requires_gestor_role(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
 
@@ -83,14 +83,14 @@ class DriverApiTest extends TestCase
     public function test_show_driver_returns_driver_with_profile(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
         DriverProfile::factory()->create([
-            'user_id'        => $messenger->id,
-            'phone'          => '600123456',
+            'user_id' => $messenger->id,
+            'phone' => '600123456',
             'license_number' => 'LIC-12345',
-            'is_available'   => true,
+            'is_available' => true,
         ]);
 
         $response = $this->actingAs($this->gestor)
@@ -113,20 +113,20 @@ class DriverApiTest extends TestCase
     {
         // Arrange: create an existing user (any role) to link as driver
         $existingUser = User::factory()->create([
-            'name'  => 'Nuevo Conductor',
+            'name' => 'Nuevo Conductor',
             'email' => 'conductor@maya.com',
-            'role'  => User::ROLE_GESTOR,
+            'role' => User::ROLE_GESTOR,
         ]);
 
         $payload = [
-            'user_id'           => $existingUser->id,
-            'phone'             => '600111222',
-            'license_number'    => 'LIC-99999',
-            'license_expiry'    => '2027-12-31',
+            'user_id' => $existingUser->id,
+            'phone' => '600111222',
+            'license_number' => 'LIC-99999',
+            'license_expiry' => '2027-12-31',
             'emergency_contact' => 'Maria Contacto',
-            'emergency_phone'   => '600333444',
-            'is_available'      => true,
-            'status'            => true,
+            'emergency_phone' => '600333444',
+            'is_available' => true,
+            'status' => true,
         ];
 
         $response = $this->actingAs($this->gestor)
@@ -142,16 +142,16 @@ class DriverApiTest extends TestCase
 
         // Assert the user was promoted to messenger
         $this->assertDatabaseHas('users', [
-            'id'   => $existingUser->id,
+            'id' => $existingUser->id,
             'role' => User::ROLE_MESSENGER,
         ]);
 
         // Assert the driver profile was created with correct data
         $this->assertDatabaseHas('driver_profiles', [
-            'user_id'        => $existingUser->id,
-            'phone'          => '600111222',
+            'user_id' => $existingUser->id,
+            'phone' => '600111222',
             'license_number' => 'LIC-99999',
-            'is_available'   => true,
+            'is_available' => true,
         ]);
     }
 
@@ -179,24 +179,24 @@ class DriverApiTest extends TestCase
     {
         // Arrange: user already has a driver profile
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
-            'name'   => 'Existing Driver',
+            'role' => User::ROLE_MESSENGER,
+            'name' => 'Existing Driver',
         ]);
         DriverProfile::factory()->create([
-            'user_id'        => $messenger->id,
-            'phone'          => '600000000',
+            'user_id' => $messenger->id,
+            'phone' => '600000000',
             'license_number' => 'OLD-LIC',
-            'is_available'   => false,
+            'is_available' => false,
         ]);
 
         // Act: create driver with same user_id (updates existing profile)
         $response = $this->actingAs($this->gestor)
             ->postJson(route('admin.drivers.store'), [
-                'user_id'        => $messenger->id,
-                'phone'          => '600111222',
+                'user_id' => $messenger->id,
+                'phone' => '600111222',
                 'license_number' => 'NEW-LIC',
-                'is_available'   => true,
-                'status'         => true,
+                'is_available' => true,
+                'status' => true,
             ]);
 
         $response->assertCreated()
@@ -207,10 +207,10 @@ class DriverApiTest extends TestCase
         // Assert profile was updated (not duplicated — unique constraint)
         $this->assertDatabaseCount('driver_profiles', 1);
         $this->assertDatabaseHas('driver_profiles', [
-            'user_id'        => $messenger->id,
-            'phone'          => '600111222',
+            'user_id' => $messenger->id,
+            'phone' => '600111222',
             'license_number' => 'NEW-LIC',
-            'is_available'   => true,
+            'is_available' => true,
         ]);
     }
 
@@ -221,22 +221,22 @@ class DriverApiTest extends TestCase
     public function test_update_driver_updates_profile_fields(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
         DriverProfile::factory()->create([
-            'user_id'        => $messenger->id,
-            'phone'          => '600000000',
+            'user_id' => $messenger->id,
+            'phone' => '600000000',
             'license_number' => 'OLD-LICENSE',
-            'is_available'   => false,
+            'is_available' => false,
         ]);
 
         $response = $this->actingAs($this->gestor)
             ->patchJson(route('admin.drivers.update', $messenger->id), [
-                'phone'          => '600999888',
+                'phone' => '600999888',
                 'license_number' => 'NEW-LICENSE',
-                'is_available'   => true,
-                'status'         => true,
+                'is_available' => true,
+                'status' => true,
             ]);
 
         $response->assertOk()
@@ -246,20 +246,20 @@ class DriverApiTest extends TestCase
             ->assertJsonPath('data.is_available', true);
 
         $this->assertDatabaseHas('driver_profiles', [
-            'user_id'        => $messenger->id,
-            'phone'          => '600999888',
+            'user_id' => $messenger->id,
+            'phone' => '600999888',
             'license_number' => 'NEW-LICENSE',
-            'is_available'   => true,
+            'is_available' => true,
         ]);
     }
 
     public function test_update_driver_does_not_change_user_name_or_email(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Original Name',
-            'email'  => 'original@maya.com',
+            'name' => 'Original Name',
+            'email' => 'original@maya.com',
         ]);
         DriverProfile::factory()->create([
             'user_id' => $messenger->id,
@@ -267,14 +267,14 @@ class DriverApiTest extends TestCase
 
         $this->actingAs($this->gestor)
             ->patchJson(route('admin.drivers.update', $messenger->id), [
-                'phone'  => '600999888',
+                'phone' => '600999888',
                 'status' => true,
             ]);
 
         // Name and email should remain unchanged
         $this->assertDatabaseHas('users', [
-            'id'    => $messenger->id,
-            'name'  => 'Original Name',
+            'id' => $messenger->id,
+            'name' => 'Original Name',
             'email' => 'original@maya.com',
         ]);
     }
@@ -282,15 +282,15 @@ class DriverApiTest extends TestCase
     public function test_update_driver_creates_profile_if_missing(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
 
         $response = $this->actingAs($this->gestor)
             ->patchJson(route('admin.drivers.update', $messenger->id), [
                 'license_number' => 'LIC-NEW',
-                'is_available'   => false,
-                'status'         => true,
+                'is_available' => false,
+                'status' => true,
             ]);
 
         $response->assertOk()
@@ -298,7 +298,7 @@ class DriverApiTest extends TestCase
             ->assertJsonPath('data.is_available', false);
 
         $this->assertDatabaseHas('driver_profiles', [
-            'user_id'      => $messenger->id,
+            'user_id' => $messenger->id,
             'is_available' => false,
         ]);
     }
@@ -310,7 +310,7 @@ class DriverApiTest extends TestCase
     public function test_delete_driver_removes_user_and_profile(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
         DriverProfile::factory()->create(['user_id' => $messenger->id]);
@@ -333,22 +333,22 @@ class DriverApiTest extends TestCase
     public function test_filter_drivers_by_availability(): void
     {
         $available = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Disponible',
+            'name' => 'Disponible',
         ]);
         DriverProfile::factory()->create([
-            'user_id'      => $available->id,
+            'user_id' => $available->id,
             'is_available' => true,
         ]);
 
         $unavailable = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Ocupado',
+            'name' => 'Ocupado',
         ]);
         DriverProfile::factory()->create([
-            'user_id'      => $unavailable->id,
+            'user_id' => $unavailable->id,
             'is_available' => false,
         ]);
 
@@ -363,14 +363,14 @@ class DriverApiTest extends TestCase
     public function test_search_drivers_by_name(): void
     {
         User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Carlos Perez',
+            'name' => 'Carlos Perez',
         ]);
         $driver = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
-            'name'   => 'Maria Gomez',
+            'name' => 'Maria Gomez',
         ]);
         DriverProfile::factory()->create(['user_id' => $driver->id]);
 
@@ -389,7 +389,7 @@ class DriverApiTest extends TestCase
     public function test_driver_includes_active_tasks_count(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
         DriverProfile::factory()->create(['user_id' => $messenger->id]);
@@ -397,16 +397,16 @@ class DriverApiTest extends TestCase
         // Create active tasks
         \App\Models\ShipmentTask::factory()->create([
             'driver_id' => $messenger->id,
-            'status'    => 'in_progress',
+            'status' => 'in_progress',
         ]);
         \App\Models\ShipmentTask::factory()->create([
             'driver_id' => $messenger->id,
-            'status'    => 'pending',
+            'status' => 'pending',
         ]);
         // Completed task should NOT be counted
         \App\Models\ShipmentTask::factory()->create([
             'driver_id' => $messenger->id,
-            'status'    => 'completed',
+            'status' => 'completed',
         ]);
 
         $response = $this->actingAs($this->gestor)
@@ -423,7 +423,7 @@ class DriverApiTest extends TestCase
     public function test_update_driver_accepts_only_profile_fields(): void
     {
         $messenger = User::factory()->create([
-            'role'   => User::ROLE_MESSENGER,
+            'role' => User::ROLE_MESSENGER,
             'status' => true,
         ]);
         DriverProfile::factory()->create(['user_id' => $messenger->id]);

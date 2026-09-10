@@ -17,6 +17,7 @@ class WarehouseApiTest extends TestCase
     use RefreshDatabase;
 
     private User $gestor;
+
     private Tenant $tenant;
 
     protected function setUp(): void
@@ -29,15 +30,16 @@ class WarehouseApiTest extends TestCase
         $this->tenant = Tenant::query()->firstOrCreate(
             ['slug' => 'demo'],
             [
-                'id'     => (string) Str::uuid(),
-                'name'   => 'Demo',
+                'id' => (string) Str::uuid(),
+                'name' => 'Demo',
                 'status' => 'active',
             ],
         );
+        $this->tenant->makeCurrent();
 
         $this->gestor = User::factory()->create([
-            'role'     => User::ROLE_GESTOR,
-            'status'   => true,
+            'role' => User::ROLE_GESTOR,
+            'status' => true,
             'tenant_id' => $this->tenant->id,
         ]);
     }
@@ -73,9 +75,9 @@ class WarehouseApiTest extends TestCase
 
         // Warehouse for a different tenant (bypass HasTenant by setting tenant_id manually)
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         Warehouse::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -164,12 +166,12 @@ class WarehouseApiTest extends TestCase
     public function test_create_warehouse_with_valid_data(): void
     {
         $payload = [
-            'name'             => 'Bodega Test',
-            'code'             => 'BOD-TEST-001',
+            'name' => 'Bodega Test',
+            'code' => 'BOD-TEST-001',
             'location_address' => 'Calle Falsa 123',
-            'location_coords'  => ['lat' => -34.6037, 'lng' => -58.3816],
-            'phone'            => '+5491112345678',
-            'is_active'        => true,
+            'location_coords' => ['lat' => -34.6037, 'lng' => -58.3816],
+            'phone' => '+5491112345678',
+            'is_active' => true,
         ];
 
         $response = $this->actingAs($this->gestor)
@@ -184,10 +186,10 @@ class WarehouseApiTest extends TestCase
             ->assertJsonPath('data.is_active', true);
 
         $this->assertDatabaseHas('warehouses', [
-            'name'             => 'Bodega Test',
-            'code'             => 'BOD-TEST-001',
+            'name' => 'Bodega Test',
+            'code' => 'BOD-TEST-001',
             'location_address' => 'Calle Falsa 123',
-            'tenant_id'        => $this->tenant->id,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         // Verify auto-generated UUID
@@ -214,8 +216,8 @@ class WarehouseApiTest extends TestCase
         Warehouse::factory()->create(['code' => 'BOD-DUP-001']);
 
         $payload = [
-            'name'             => 'Bodega Duplicate',
-            'code'             => 'BOD-DUP-001',
+            'name' => 'Bodega Duplicate',
+            'code' => 'BOD-DUP-001',
             'location_address' => 'Some Address',
         ];
 
@@ -236,14 +238,14 @@ class WarehouseApiTest extends TestCase
 
         // Different tenant
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         Warehouse::factory()->create(['code' => 'BOD-SHARED', 'tenant_id' => $otherTenant->id]);
 
-        // Should still be able to create with same code in current tenant? 
+        // Should still be able to create with same code in current tenant?
         // No — the unique rule is per-tenant, so BOD-SHARED already exists in current tenant
         // Let's test the inverse: other tenant has it, current tenant doesn't
         $this->assertDatabaseCount('warehouses', 2);
@@ -251,8 +253,8 @@ class WarehouseApiTest extends TestCase
         // Create a different code in current tenant — should work
         $response = $this->actingAs($this->gestor)
             ->postJson(route('admin.bodegas.store'), [
-                'name'             => 'New Bodega',
-                'code'             => 'BOD-UNIQUE',
+                'name' => 'New Bodega',
+                'code' => 'BOD-UNIQUE',
                 'location_address' => 'Address',
             ]);
 
@@ -272,11 +274,11 @@ class WarehouseApiTest extends TestCase
 
         $response = $this->actingAs($this->gestor)
             ->patchJson(route('admin.bodegas.update', $warehouse->id), [
-                'name'             => 'Updated Name',
-                'code'             => 'BOD-UPDATED',
+                'name' => 'Updated Name',
+                'code' => 'BOD-UPDATED',
                 'location_address' => 'New Address',
-                'phone'            => '+5491198765432',
-                'is_active'        => false,
+                'phone' => '+5491198765432',
+                'is_active' => false,
             ]);
 
         $response->assertOk()
@@ -287,7 +289,7 @@ class WarehouseApiTest extends TestCase
             ->assertJsonPath('data.is_active', false);
 
         $this->assertDatabaseHas('warehouses', [
-            'id'   => $warehouse->id,
+            'id' => $warehouse->id,
             'name' => 'Updated Name',
             'code' => 'BOD-UPDATED',
         ]);
@@ -329,7 +331,7 @@ class WarehouseApiTest extends TestCase
 
         // B's code should remain unchanged
         $this->assertDatabaseHas('warehouses', [
-            'id'   => $warehouseB->id,
+            'id' => $warehouseB->id,
             'code' => 'BOD-B',
         ]);
     }
@@ -377,9 +379,9 @@ class WarehouseApiTest extends TestCase
     public function test_cannot_show_warehouse_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other Tenant',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherWarehouse = Warehouse::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -393,9 +395,9 @@ class WarehouseApiTest extends TestCase
     public function test_cannot_update_warehouse_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other Tenant',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherWarehouse = Warehouse::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -412,9 +414,9 @@ class WarehouseApiTest extends TestCase
     public function test_cannot_delete_warehouse_of_different_tenant(): void
     {
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other Tenant',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         $otherWarehouse = Warehouse::factory()->create(['tenant_id' => $otherTenant->id]);
@@ -425,7 +427,7 @@ class WarehouseApiTest extends TestCase
         $response->assertNotFound();
 
         // Verify the warehouse was NOT deleted
-        $this->assertNull(Warehouse::withTrashed()->find($otherWarehouse->id)->deleted_at);
+        $this->assertNull(Warehouse::withoutGlobalScopes()->withTrashed()->find($otherWarehouse->id)->deleted_at);
     }
 
     public function test_list_does_not_include_other_tenant_warehouses(): void
@@ -433,9 +435,9 @@ class WarehouseApiTest extends TestCase
         Warehouse::factory()->count(2)->create();
 
         $otherTenant = Tenant::query()->create([
-            'id'     => (string) Str::uuid(),
-            'name'   => 'Other Tenant',
-            'slug'   => 'other',
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other',
             'status' => 'active',
         ]);
         Warehouse::factory()->count(3)->create(['tenant_id' => $otherTenant->id]);
