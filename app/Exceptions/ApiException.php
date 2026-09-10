@@ -18,10 +18,8 @@ use Throwable;
  *
  * @example
  * throw ApiException::make('USER_NOT_FOUND', 'Usuario no encontrado', 404);
- *
  * @example
  * throw ApiException::notFound('SHIPMENT_NOT_FOUND', 'Envío no existe');
- *
  * @example
  * throw ApiException::validation('VALIDATION_ERROR', 'Datos inválidos')
  *     ->withData(['field' => 'email']);
@@ -62,9 +60,9 @@ class ApiException extends Exception
     /**
      * Crea una nueva instancia de ApiException.
      *
-     * @param string $errorCode Código de error de la aplicación
-     * @param string $message Mensaje descriptivo del error
-     * @param int $httpStatus Código HTTP de estado
+     * @param  string  $errorCode  Código de error de la aplicación
+     * @param  string  $message  Mensaje descriptivo del error
+     * @param  int  $httpStatus  Código HTTP de estado
      */
     public static function make(
         string $errorCode,
@@ -134,7 +132,7 @@ class ApiException extends Exception
     /**
      * Agrega datos adicionales a la excepción (fluent interface).
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function withData(array $data): self
     {
@@ -194,7 +192,7 @@ class ApiException extends Exception
             ],
         ];
 
-        if (!empty($this->data)) {
+        if (! empty($this->data)) {
             $response['error']['data'] = $this->data;
         }
 

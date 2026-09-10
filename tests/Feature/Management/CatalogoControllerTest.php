@@ -103,7 +103,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->put('/management/catalogos/' . $catalogo->id, [
+            ->put('/management/catalogos/'.$catalogo->id, [
                 'nombre' => 'Updated Name',
                 'is_global' => true,
             ]);
@@ -124,7 +124,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->put('/management/catalogos/' . $catalogo->id, [
+            ->put('/management/catalogos/'.$catalogo->id, [
                 'nombre' => 'Updated',
                 'slug' => 'new-slug',
                 'is_global' => true,
@@ -146,7 +146,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->deleteJson('/management/catalogos/' . $catalogo->id);
+            ->deleteJson('/management/catalogos/'.$catalogo->id);
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
@@ -169,7 +169,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->deleteJson('/management/catalogos/' . $catalogo->id);
+            ->deleteJson('/management/catalogos/'.$catalogo->id);
 
         $response->assertStatus(422);
         $response->assertJsonPath('success', false);

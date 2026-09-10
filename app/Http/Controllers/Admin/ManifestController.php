@@ -65,21 +65,21 @@ class ManifestController extends Controller
             ->orderBy('created_at', 'asc')
             ->get()
             ->map(fn (Shipment $shipment) => [
-                'id'                  => $shipment->id,
-                'tracking_number'     => $shipment->tracking_number,
-                'recipient_name'      => $shipment->recipient_name,
-                'recipient_phone'     => $shipment->recipient_phone,
+                'id' => $shipment->id,
+                'tracking_number' => $shipment->tracking_number,
+                'recipient_name' => $shipment->recipient_name,
+                'recipient_phone' => $shipment->recipient_phone,
                 'destination_address' => $shipment->destination_address,
-                'weight_kg'           => $shipment->weight_kg,
-                'weight_lb'           => $shipment->weight_lb,
-                'package_type'        => $shipment->package_type,
-                'total_cost'          => $shipment->total_cost,
-                'status'              => $shipment->status,
-                'status_label'        => $shipment->getStatusLabel(),
-                'warehouse'           => $shipment->warehouse
+                'weight_kg' => $shipment->weight_kg,
+                'weight_lb' => $shipment->weight_lb,
+                'package_type' => $shipment->package_type,
+                'total_cost' => $shipment->total_cost,
+                'status' => $shipment->status,
+                'status_label' => $shipment->getStatusLabel(),
+                'warehouse' => $shipment->warehouse
                     ? ['id' => $shipment->warehouse->id, 'name' => $shipment->warehouse->name]
                     : null,
-                'created_at'          => $shipment->created_at,
+                'created_at' => $shipment->created_at,
             ])
             ->toArray();
     }
@@ -99,9 +99,9 @@ class ManifestController extends Controller
             ->orderBy('name', 'asc')
             ->get()
             ->map(fn (User $user) => [
-                'id'                     => $user->id,
-                'full_name'              => $user->name,
-                'email'                  => $user->email,
+                'id' => $user->id,
+                'full_name' => $user->name,
+                'email' => $user->email,
                 'paquetes_asignados_hoy' => Shipment::where('assigned_task_id', '!=', null)
                     ->whereHas('assignedTask', fn ($q) => $q
                         ->where('driver_id', $user->id)
@@ -125,22 +125,19 @@ class ManifestController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(fn (Manifest $manifest) => [
-                'id'          => $manifest->id,
-                'messenger'   => $manifest->messenger
+                'id' => $manifest->id,
+                'messenger' => $manifest->messenger
                     ? ['id' => $manifest->messenger->id, 'full_name' => $manifest->messenger->name]
                     : null,
                 'total_items' => $manifest->items_count,
-                'status'      => $manifest->status?->valor ?? 'Preparando',
-                'created_at'  => $manifest->created_at,
+                'status' => $manifest->status?->valor ?? 'Preparando',
+                'created_at' => $manifest->created_at,
             ])
             ->toArray();
     }
 
     /**
      * Crea un nuevo manifiesto con paquetes asignados.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {
@@ -214,9 +211,6 @@ class ManifestController extends Controller
 
     /**
      * Inicia el despacho de un manifiesto.
-     *
-     * @param string $id
-     * @return JsonResponse
      */
     public function iniciarDespacho(string $id): JsonResponse
     {
@@ -263,9 +257,6 @@ class ManifestController extends Controller
 
     /**
      * Obtiene el detalle de un manifiesto.
-     *
-     * @param string $id
-     * @return JsonResponse
      */
     public function show(string $id): JsonResponse
     {
@@ -312,9 +303,6 @@ class ManifestController extends Controller
 
     /**
      * Lista los manifiestos con filtros opcionales.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function list(Request $request): JsonResponse
     {

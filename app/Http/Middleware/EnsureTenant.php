@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Models\Tenant;
 use App\TenantFinder\DomainTenantFinder;
 use Closure;
-use Illuminate\Http\Request;
 // Must use App\Models\Tenant so the container holds an App\Models\Tenant instance.
 // Spatie::current() returns ?static — if a base Spatie\Tenant is stored instead,
 // PHP strict return-types throw a TypeError when retrieving from App\Models\Tenant::current().
-use App\Models\Tenant;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenant
@@ -36,6 +36,7 @@ class EnsureTenant
                 $tenant->makeCurrent();
                 \Log::info('Tenant set to demo', ['tenant_id' => $tenant->id]);
             }
+
             return $next($request);
         }
 
@@ -43,7 +44,7 @@ class EnsureTenant
 
         if (! $tenant) {
             // Try to resolve tenant using DomainTenantFinder
-            $finder = new DomainTenantFinder();
+            $finder = new DomainTenantFinder;
             $tenant = $finder->findForRequest($request);
 
             if ($tenant) {

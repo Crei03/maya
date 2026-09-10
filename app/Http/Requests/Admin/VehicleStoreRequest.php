@@ -22,21 +22,21 @@ class VehicleStoreRequest extends FormRequest
         $tenantId = auth()->user()?->tenant_id;
 
         return [
-            'license_plate'   => [
+            'license_plate' => [
                 'required',
                 'string',
                 'max:20',
                 Rule::unique('vehicles')->where(fn ($q) => $q->where('tenant_id', $tenantId)),
             ],
-            'type'            => ['required', Rule::in(['internal', 'external'])],
-            'brand'           => ['required', 'string', 'max:100'],
-            'model'           => ['required', 'string', 'max:100'],
-            'year'            => ['required', 'integer', 'min:1900', 'max:2100'],
-            'capacity_kg'     => ['nullable', 'numeric', 'min:0'],
+            'type' => ['required', Rule::in(['internal', 'external'])],
+            'brand' => ['required', 'string', 'max:100'],
+            'model' => ['required', 'string', 'max:100'],
+            'year' => ['required', 'integer', 'min:1900', 'max:2100'],
+            'capacity_kg' => ['nullable', 'numeric', 'min:0'],
             'capacity_volume' => ['nullable', 'string', 'max:100'],
-            'color'           => ['nullable', 'string', 'max:50'],
-            'is_active'       => ['boolean'],
-            'notes'           => ['nullable', 'string'],
+            'color' => ['nullable', 'string', 'max:50'],
+            'is_active' => ['boolean'],
+            'notes' => ['nullable', 'string'],
         ];
     }
 
@@ -47,17 +47,17 @@ class VehicleStoreRequest extends FormRequest
     {
         return [
             'license_plate.required' => 'La placa es obligatoria.',
-            'license_plate.unique'   => 'Esta placa ya está registrada en el sistema.',
-            'license_plate.max'      => 'La placa no puede superar 20 caracteres.',
-            'type.required'          => 'El tipo de vehículo es obligatorio.',
-            'type.in'                => 'El tipo debe ser interno o externo.',
-            'brand.required'         => 'La marca es obligatoria.',
-            'model.required'         => 'El modelo es obligatorio.',
-            'year.required'          => 'El año es obligatorio.',
-            'year.integer'           => 'El año debe ser un número entero.',
-            'year.min'               => 'El año no puede ser menor a 1900.',
-            'year.max'               => 'El año no puede ser mayor a 2100.',
-            'capacity_kg.numeric'    => 'La capacidad en kg debe ser un número.',
+            'license_plate.unique' => 'Esta placa ya está registrada en el sistema.',
+            'license_plate.max' => 'La placa no puede superar 20 caracteres.',
+            'type.required' => 'El tipo de vehículo es obligatorio.',
+            'type.in' => 'El tipo debe ser interno o externo.',
+            'brand.required' => 'La marca es obligatoria.',
+            'model.required' => 'El modelo es obligatorio.',
+            'year.required' => 'El año es obligatorio.',
+            'year.integer' => 'El año debe ser un número entero.',
+            'year.min' => 'El año no puede ser menor a 1900.',
+            'year.max' => 'El año no puede ser mayor a 2100.',
+            'capacity_kg.numeric' => 'La capacidad en kg debe ser un número.',
         ];
     }
 
@@ -67,16 +67,16 @@ class VehicleStoreRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'license_plate'   => 'placa',
-            'type'            => 'tipo',
-            'brand'           => 'marca',
-            'model'           => 'modelo',
-            'year'            => 'año',
-            'capacity_kg'     => 'capacidad (kg)',
+            'license_plate' => 'placa',
+            'type' => 'tipo',
+            'brand' => 'marca',
+            'model' => 'modelo',
+            'year' => 'año',
+            'capacity_kg' => 'capacidad (kg)',
             'capacity_volume' => 'capacidad volumétrica',
-            'color'           => 'color',
-            'is_active'       => 'activo',
-            'notes'           => 'notas',
+            'color' => 'color',
+            'is_active' => 'activo',
+            'notes' => 'notas',
         ];
     }
 }

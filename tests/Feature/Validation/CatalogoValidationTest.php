@@ -86,7 +86,7 @@ class CatalogoValidationTest extends TestCase
         ]);
 
         $this->actingAs($this->superAdmin)
-            ->put('/management/catalogos/' . $catalogo->id, [
+            ->put('/management/catalogos/'.$catalogo->id, [
                 'nombre' => 'Updated',
                 'slug' => 'new-slug',
                 'is_global' => true,
@@ -110,7 +110,7 @@ class CatalogoValidationTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post('/management/catalogos/' . $catalogo->id . '/valores', [
+            ->post('/management/catalogos/'.$catalogo->id.'/valores', [
                 'catalogo_id' => $catalogo->id,
                 'codigo' => 'TOOLONG',
                 'valor' => 'Test',
@@ -128,7 +128,7 @@ class CatalogoValidationTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post('/management/catalogos/' . $catalogo->id . '/valores', [
+            ->post('/management/catalogos/'.$catalogo->id.'/valores', [
                 'catalogo_id' => $catalogo->id,
                 'codigo' => 'ABC',
             ]);
@@ -145,14 +145,14 @@ class CatalogoValidationTest extends TestCase
         ]);
 
         $this->actingAs($this->superAdmin)
-            ->post('/management/catalogos/' . $catalogo->id . '/valores', [
+            ->post('/management/catalogos/'.$catalogo->id.'/valores', [
                 'catalogo_id' => $catalogo->id,
                 'codigo' => 'ABC',
                 'valor' => 'First',
             ]);
 
         $response = $this->actingAs($this->superAdmin)
-            ->post('/management/catalogos/' . $catalogo->id . '/valores', [
+            ->post('/management/catalogos/'.$catalogo->id.'/valores', [
                 'catalogo_id' => $catalogo->id,
                 'codigo' => 'ABC',
                 'valor' => 'Second',
@@ -177,7 +177,7 @@ class CatalogoValidationTest extends TestCase
         ]);
 
         $this->actingAs($this->superAdmin)
-            ->put('/management/catalogos/' . $catalogo->id . '/valores/' . $valor->id, [
+            ->put('/management/catalogos/'.$catalogo->id.'/valores/'.$valor->id, [
                 'valor' => 'Updated',
                 'codigo' => 'NEW',
             ]);

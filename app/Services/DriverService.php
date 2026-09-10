@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\DriverProfile;
-use App\Models\ShipmentTask;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Spatie\Multitenancy\Models\Tenant;
 
 class DriverService
@@ -92,12 +90,12 @@ class DriverService
             // Create or update driver profile
             $profile = $user->driverProfile;
             $profileData = [
-                'phone'             => $data['phone'] ?? null,
-                'license_number'    => $data['license_number'] ?? null,
-                'license_expiry'    => $data['license_expiry'] ?? null,
+                'phone' => $data['phone'] ?? null,
+                'license_number' => $data['license_number'] ?? null,
+                'license_expiry' => $data['license_expiry'] ?? null,
                 'emergency_contact' => $data['emergency_contact'] ?? null,
-                'emergency_phone'   => $data['emergency_phone'] ?? null,
-                'is_available'      => $data['is_available'] ?? true,
+                'emergency_phone' => $data['emergency_phone'] ?? null,
+                'is_available' => $data['is_available'] ?? true,
             ];
 
             if ($profile) {
@@ -176,19 +174,19 @@ class DriverService
         $profile = $user->driverProfile;
 
         return [
-            'id'                  => $user->id,
-            'name'                => $user->name,
-            'email'               => $user->email,
-            'phone'               => $profile?->phone,
-            'role'                => $user->role,
-            'status'              => $user->status,
-            'license_number'      => $profile?->license_number,
-            'license_expiry'      => $profile?->license_expiry?->toDateString(),
-            'emergency_contact'   => $profile?->emergency_contact,
-            'emergency_phone'     => $profile?->emergency_phone,
-            'is_available'        => $profile?->is_available ?? true,
-            'active_tasks_count'  => (int) ($user->active_tasks_count ?? 0),
-            'created_at'          => $user->created_at?->toISOString(),
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $profile?->phone,
+            'role' => $user->role,
+            'status' => $user->status,
+            'license_number' => $profile?->license_number,
+            'license_expiry' => $profile?->license_expiry?->toDateString(),
+            'emergency_contact' => $profile?->emergency_contact,
+            'emergency_phone' => $profile?->emergency_phone,
+            'is_available' => $profile?->is_available ?? true,
+            'active_tasks_count' => (int) ($user->active_tasks_count ?? 0),
+            'created_at' => $user->created_at?->toISOString(),
         ];
     }
 }

@@ -15,8 +15,7 @@ class WarehouseController extends Controller
 {
     public function __construct(
         private readonly WarehouseService $warehouseService
-    ) {
-    }
+    ) {}
 
     /**
      * Render the Bodegas configuration page.
@@ -38,7 +37,7 @@ class WarehouseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $warehouses->through(fn ($w) => $this->warehouseService->mapWarehouse($w)),
+            'data' => $warehouses->through(fn ($w) => $this->warehouseService->mapWarehouse($w)),
         ]);
     }
 
@@ -51,7 +50,7 @@ class WarehouseController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->warehouseService->mapWarehouse($warehouse),
+            'data' => $this->warehouseService->mapWarehouse($warehouse),
         ]);
     }
 
@@ -65,7 +64,7 @@ class WarehouseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Bodega creada correctamente.',
-            'data'    => $this->warehouseService->mapWarehouse($warehouse),
+            'data' => $this->warehouseService->mapWarehouse($warehouse),
         ], 201);
     }
 
@@ -79,7 +78,7 @@ class WarehouseController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Bodega actualizada correctamente.',
-            'data'    => $this->warehouseService->mapWarehouse($updated),
+            'data' => $this->warehouseService->mapWarehouse($updated),
         ]);
     }
 

@@ -15,8 +15,7 @@ class VehicleController extends Controller
 {
     public function __construct(
         private readonly VehicleService $vehicleService
-    ) {
-    }
+    ) {}
 
     /**
      * Render the Transportes configuration page.
@@ -38,7 +37,7 @@ class VehicleController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $vehicles->through(fn ($v) => $this->vehicleService->mapVehicle($v)),
+            'data' => $vehicles->through(fn ($v) => $this->vehicleService->mapVehicle($v)),
         ]);
     }
 
@@ -51,7 +50,7 @@ class VehicleController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->vehicleService->mapVehicle($vehicle),
+            'data' => $this->vehicleService->mapVehicle($vehicle),
         ]);
     }
 
@@ -65,7 +64,7 @@ class VehicleController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Vehículo creado correctamente.',
-            'data'    => $this->vehicleService->mapVehicle($vehicle),
+            'data' => $this->vehicleService->mapVehicle($vehicle),
         ], 201);
     }
 
@@ -79,7 +78,7 @@ class VehicleController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Vehículo actualizado correctamente.',
-            'data'    => $this->vehicleService->mapVehicle($updated),
+            'data' => $this->vehicleService->mapVehicle($updated),
         ]);
     }
 

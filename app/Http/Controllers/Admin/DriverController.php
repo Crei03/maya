@@ -15,8 +15,7 @@ class DriverController extends Controller
 {
     public function __construct(
         private readonly DriverService $driverService
-    ) {
-    }
+    ) {}
 
     /**
      * Listar conductores con filtros opcionales.
@@ -29,7 +28,7 @@ class DriverController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $drivers,
+            'data' => $drivers,
         ]);
     }
 
@@ -42,7 +41,7 @@ class DriverController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->driverService->mapDriver($driver),
+            'data' => $this->driverService->mapDriver($driver),
         ]);
     }
 
@@ -56,7 +55,7 @@ class DriverController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Conductor creado correctamente.',
-            'data'    => $this->driverService->mapDriver($driver),
+            'data' => $this->driverService->mapDriver($driver),
         ], 201);
     }
 
@@ -70,7 +69,7 @@ class DriverController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Conductor actualizado correctamente.',
-            'data'    => $this->driverService->mapDriver($driver),
+            'data' => $this->driverService->mapDriver($driver),
         ]);
     }
 

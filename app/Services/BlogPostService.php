@@ -16,7 +16,7 @@ class BlogPostService
     {
         $data['slug'] = $this->generateUniqueSlug($data['title']);
 
-        if (!empty($data['is_published'])) {
+        if (! empty($data['is_published'])) {
             $data['published_at'] = $data['published_at'] ?? now();
         }
 
@@ -29,11 +29,11 @@ class BlogPostService
 
     public function update(BlogPost $post, array $data, array $images = [], array $deletedImageIds = []): BlogPost
     {
-        if (!empty($data['title']) && $data['title'] !== $post->title) {
+        if (! empty($data['title']) && $data['title'] !== $post->title) {
             $data['slug'] = $this->generateUniqueSlug($data['title'], $post->id);
         }
 
-        if (!empty($data['is_published']) && !$post->is_published) {
+        if (! empty($data['is_published']) && ! $post->is_published) {
             $data['published_at'] = $data['published_at'] ?? now();
         }
 
@@ -52,7 +52,7 @@ class BlogPostService
         foreach ($images as $image) {
             if ($image instanceof UploadedFile) {
                 $path = Storage::disk('public')->putFile(
-                    'blog/' . $post->id,
+                    'blog/'.$post->id,
                     $image
                 );
 
@@ -110,7 +110,7 @@ class BlogPostService
         $counter = 2;
 
         while ($this->slugExists($slug, $excludeId)) {
-            $slug = $originalSlug . '-' . $counter;
+            $slug = $originalSlug.'-'.$counter;
             $counter++;
         }
 

@@ -24,9 +24,13 @@ class User extends Authenticatable
     ];
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
+
     public const ROLE_GESTOR = 'gestor';
+
     public const ROLE_MESSENGER = 'messenger';
+
     public const ROLE_CLIENT = 'client';
+
     public const ROLE_ADMIN = 'admin'; // @deprecated Use ROLE_GESTOR instead
 
     protected $hidden = [

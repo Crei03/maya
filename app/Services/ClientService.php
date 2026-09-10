@@ -18,7 +18,7 @@ class ClientService
     /**
      * Paginate clients with filters.
      *
-     * @param array<string, mixed> $filters
+     * @param  array<string, mixed>  $filters
      */
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
@@ -62,7 +62,7 @@ class ClientService
     /**
      * Create a client record.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function create(array $data): Client
     {
@@ -88,7 +88,7 @@ class ClientService
     /**
      * Update a client record.
      *
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function update(string $id, array $data): Client
     {

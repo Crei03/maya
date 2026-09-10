@@ -16,10 +16,10 @@ class FilterDriverRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search'       => ['nullable', 'string'],
+            'search' => ['nullable', 'string'],
             'is_available' => ['nullable', 'string', 'in:0,1,true,false'],
-            'status'       => ['nullable', 'string', 'in:0,1,true,false'],
-            'per_page'     => ['nullable', 'integer'],
+            'status' => ['nullable', 'string', 'in:0,1,true,false'],
+            'per_page' => ['nullable', 'integer'],
         ];
     }
 }

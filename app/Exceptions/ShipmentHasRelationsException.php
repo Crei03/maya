@@ -11,8 +11,8 @@ class ShipmentHasRelationsException extends RuntimeException
     /**
      * Create a new exception instance.
      *
-     * @param string $shipmentId  The UUID of the shipment
-     * @param string $relationType The relation type blocking deletion
+     * @param  string  $shipmentId  The UUID of the shipment
+     * @param  string  $relationType  The relation type blocking deletion
      */
     public function __construct(string $shipmentId, string $relationType)
     {

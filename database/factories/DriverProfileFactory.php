@@ -17,13 +17,13 @@ class DriverProfileFactory extends Factory
     public function definition(): array
     {
         return [
-            'id'                => $this->faker->uuid(),
-            'user_id'           => null,
-            'license_number'    => $this->faker->optional()->numerify('LIC-#####'),
-            'license_expiry'    => $this->faker->optional()->dateTimeBetween('+1 month', '+5 years'),
+            'id' => $this->faker->uuid(),
+            'user_id' => null,
+            'license_number' => $this->faker->optional()->numerify('LIC-#####'),
+            'license_expiry' => $this->faker->optional()->dateTimeBetween('+1 month', '+5 years'),
             'emergency_contact' => $this->faker->optional()->name(),
-            'emergency_phone'   => $this->faker->optional()->phoneNumber(),
-            'is_available'      => true,
+            'emergency_phone' => $this->faker->optional()->phoneNumber(),
+            'is_available' => true,
         ];
     }
 

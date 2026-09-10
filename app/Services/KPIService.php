@@ -27,8 +27,8 @@ class KPIService
      * Calcula el porcentaje de entregas exitosas vs. totales
      * usando la tabla manifest_items (is_delivered).
      *
-     * @param Carbon|null $startDate Fecha inicial opcional
-     * @param Carbon|null $endDate Fecha final opcional
+     * @param  Carbon|null  $startDate  Fecha inicial opcional
+     * @param  Carbon|null  $endDate  Fecha final opcional
      * @return array<string, mixed>
      */
     public function getDeliveryRate(?Carbon $startDate = null, ?Carbon $endDate = null): array
@@ -62,8 +62,8 @@ class KPIService
      *
      * Calcula el promedio de calificaciones 1-5.
      *
-     * @param Carbon|null $startDate Fecha inicial opcional
-     * @param Carbon|null $endDate Fecha final opcional
+     * @param  Carbon|null  $startDate  Fecha inicial opcional
+     * @param  Carbon|null  $endDate  Fecha final opcional
      * @return array<string, mixed>
      */
     public function getSatisfactionScore(?Carbon $startDate = null, ?Carbon $endDate = null): array
@@ -87,7 +87,7 @@ class KPIService
 
         // Asegurar que existan todas las calificaciones 1-5
         for ($i = 1; $i <= 5; $i++) {
-            if (!isset($distribution[$i])) {
+            if (! isset($distribution[$i])) {
                 $distribution[$i] = 0;
             }
         }
@@ -107,9 +107,9 @@ class KPIService
     /**
      * Obtiene el Delivery Rate agrupado por mensajero.
      *
-     * @param int|null $limit Cantidad de mensajeros a retornar
-     * @param Carbon|null $startDate Fecha inicial opcional
-     * @param Carbon|null $endDate Fecha final opcional
+     * @param  int|null  $limit  Cantidad de mensajeros a retornar
+     * @param  Carbon|null  $startDate  Fecha inicial opcional
+     * @param  Carbon|null  $endDate  Fecha final opcional
      * @return Collection<int, array>
      */
     public function getDeliveryRateByMessenger(
@@ -186,16 +186,14 @@ class KPIService
     /**
      * Obtiene todos los KPIs para el dashboard.
      *
-     * @param Carbon|null $startDate
-     * @param Carbon|null $endDate
      * @return array<string, mixed>
      */
     public function getAllKPIs(?Carbon $startDate = null, ?Carbon $endDate = null): array
     {
-        if (!$startDate) {
+        if (! $startDate) {
             $startDate = Carbon::now()->subDays(30);
         }
-        if (!$endDate) {
+        if (! $endDate) {
             $endDate = Carbon::now();
         }
 

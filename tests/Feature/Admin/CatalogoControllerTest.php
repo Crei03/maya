@@ -17,6 +17,7 @@ class CatalogoControllerTest extends TestCase
     use RefreshDatabase;
 
     private User $gestor;
+
     private Tenant $tenant;
 
     protected function setUp(): void
@@ -168,7 +169,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->putJson('/configuracion/catalogo/valores/' . $valor->id, [
+            ->putJson('/configuracion/catalogo/valores/'.$valor->id, [
                 'valor' => 'Updated Value',
             ]);
 
@@ -199,7 +200,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->putJson('/configuracion/catalogo/valores/' . $valor->id, [
+            ->putJson('/configuracion/catalogo/valores/'.$valor->id, [
                 'valor' => 'Hacked',
             ]);
 
@@ -224,7 +225,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->deleteJson('/configuracion/catalogos/valores/' . $valor->id);
+            ->deleteJson('/configuracion/catalogos/valores/'.$valor->id);
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
@@ -248,7 +249,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->deleteJson('/configuracion/catalogos/valores/' . $valor->id);
+            ->deleteJson('/configuracion/catalogos/valores/'.$valor->id);
 
         $response->assertForbidden();
         $response->assertJsonPath('message', 'No tienes permiso para eliminar este valor.');

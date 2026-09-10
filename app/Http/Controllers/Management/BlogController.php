@@ -20,8 +20,7 @@ class BlogController extends Controller
 {
     public function __construct(
         private readonly BlogPostService $blogPostService
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -34,6 +33,7 @@ class BlogController extends Controller
                 if ($status === 'draft') {
                     return $q->where('is_published', false);
                 }
+
                 return $q;
             })
             ->orderBy('updated_at', 'desc')
@@ -121,7 +121,7 @@ class BlogController extends Controller
         $file = $request->file('image');
         $path = $file->store('blog/uploads', 'public');
 
-        if (!$path) {
+        if (! $path) {
             return response()->json(['error' => 'No se pudo guardar la imagen.'], 500);
         }
 

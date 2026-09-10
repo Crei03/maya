@@ -15,7 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if (config('multi-tenant.enabled')) {
                 // Tenant-scoped routes under subdomain (production)
                 Route::middleware('web')
-                    ->domain('{tenant}.' . parse_url(config('app.url'), PHP_URL_HOST))
+                    ->domain('{tenant}.'.parse_url(config('app.url'), PHP_URL_HOST))
                     ->group(base_path('routes/admin.php'));
             } else {
                 // Single-tenant mode: register admin routes on main domain

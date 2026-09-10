@@ -3,9 +3,9 @@
 namespace App\Providers;
 
 use App\Models\Tenant;
+use App\TenantFinder\DomainTenantFinder;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-use App\TenantFinder\DomainTenantFinder;
 
 class AppServiceProvider extends ServiceProvider
 {

@@ -14,7 +14,7 @@ return new class extends Migration
     {
         // Create default Demo tenant
         $demoTenantId = (string) Str::uuid();
-        
+
         DB::table('tenants')->insert([
             'id' => $demoTenantId,
             'name' => 'Demo Paqueteria',

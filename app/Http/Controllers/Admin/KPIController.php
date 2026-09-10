@@ -22,8 +22,7 @@ class KPIController extends Controller
      */
     public function __construct(
         private readonly KPIService $kpiService
-    ) {
-    }
+    ) {}
 
     /**
      * Muestra el dashboard de KPIs.

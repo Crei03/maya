@@ -33,7 +33,7 @@ class BlogPostController extends Controller
             ->where('slug', $slug)
             ->first();
 
-        if (!$post) {
+        if (! $post) {
             abort(404);
         }
 
@@ -56,14 +56,14 @@ class BlogPostController extends Controller
         $data = $post->toArray();
 
         // Convert featured_image_url if it's a relative path
-        if (!empty($data['featured_image_url']) && !str_starts_with($data['featured_image_url'], 'http')) {
+        if (! empty($data['featured_image_url']) && ! str_starts_with($data['featured_image_url'], 'http')) {
             $data['featured_image_url'] = Storage::disk('public')->url($data['featured_image_url']);
         }
 
         // Add absolute URLs to each image
         if (isset($data['images'])) {
             foreach ($data['images'] as &$image) {
-                if (isset($image['path']) && !str_starts_with($image['path'], 'http')) {
+                if (isset($image['path']) && ! str_starts_with($image['path'], 'http')) {
                     $image['url'] = Storage::disk('public')->url($image['path']);
                 }
             }

@@ -62,7 +62,7 @@ class UsersService
             'status' => $data['status'],
         ];
 
-        if (!empty($data['password'])) {
+        if (! empty($data['password'])) {
             $fillData['password'] = Hash::make($data['password']);
         }
 

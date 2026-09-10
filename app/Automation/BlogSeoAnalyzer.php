@@ -35,9 +35,10 @@ class BlogSeoAnalyzer
         $maxLen = 60 - strlen($prefix);
         $title = $this->title;
         if (mb_strlen($title) > $maxLen) {
-            $title = mb_substr($title, 0, $maxLen - 3) . '...';
+            $title = mb_substr($title, 0, $maxLen - 3).'...';
         }
-        return $prefix . $title;
+
+        return $prefix.$title;
     }
 
     public function suggestMetaDescription(): string
@@ -49,27 +50,28 @@ class BlogSeoAnalyzer
             $desc = mb_substr($text, 0, 155);
         }
         if (mb_strlen($desc) > 155) {
-            $desc = mb_substr($desc, 0, 152) . '...';
+            $desc = mb_substr($desc, 0, 152).'...';
         }
+
         return $desc;
     }
 
     public function extractKeywords(int $limit = 8): array
     {
-        $stopWords = ['el','la','los','las','de','del','en','un','una','y','o','que',
-            'por','para','con','sin','se','su','al','es','lo','como','más','pero',
-            'sus','le','ya','este','entre','cuando','muy','hay','vez','todo','nos',
-            'han','así','ser','fue','son','era','está','están','tiene','tienen',
-            'del','al','una','unos','unas','sobre','todo','también','solo','otros',
-            'cada','hace','puede','pueden','hacer','forma','parte','desde','hasta',
-            'porque','cual','cuales','donde','cuando','aunque','sino','mientras'];
+        $stopWords = ['el', 'la', 'los', 'las', 'de', 'del', 'en', 'un', 'una', 'y', 'o', 'que',
+            'por', 'para', 'con', 'sin', 'se', 'su', 'al', 'es', 'lo', 'como', 'más', 'pero',
+            'sus', 'le', 'ya', 'este', 'entre', 'cuando', 'muy', 'hay', 'vez', 'todo', 'nos',
+            'han', 'así', 'ser', 'fue', 'son', 'era', 'está', 'están', 'tiene', 'tienen',
+            'del', 'al', 'una', 'unos', 'unas', 'sobre', 'todo', 'también', 'solo', 'otros',
+            'cada', 'hace', 'puede', 'pueden', 'hacer', 'forma', 'parte', 'desde', 'hasta',
+            'porque', 'cual', 'cuales', 'donde', 'cuando', 'aunque', 'sino', 'mientras'];
 
         $words = preg_split('/\s+/', strtolower($this->plainText));
-        $words = array_map(function($w) {
+        $words = array_map(function ($w) {
             return preg_replace('/[^a-záéíóúüñ]/u', '', $w);
         }, $words);
-        $words = array_filter($words, function($w) use ($stopWords) {
-            return mb_strlen($w) > 2 && !in_array($w, $stopWords);
+        $words = array_filter($words, function ($w) use ($stopWords) {
+            return mb_strlen($w) > 2 && ! in_array($w, $stopWords);
         });
 
         $freq = array_count_values($words);
@@ -86,7 +88,8 @@ class BlogSeoAnalyzer
     public function extractReadingTime(int $wpm = 200): int
     {
         $wordCount = str_word_count($this->plainText, 0, 'áéíóúüñÁÉÍÓÚÜÑ');
-        return max(1, (int)ceil($wordCount / $wpm));
+
+        return max(1, (int) ceil($wordCount / $wpm));
     }
 
     public function generateStructuredData(): array

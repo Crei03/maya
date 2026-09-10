@@ -20,10 +20,10 @@ class WarehouseFactory extends Factory
      */
     public function definition(): array
     {
-        $code = 'BOD-' . strtoupper(Str::random(3)) . '-' . fake()->numberBetween(100, 999);
+        $code = 'BOD-'.strtoupper(Str::random(3)).'-'.fake()->numberBetween(100, 999);
 
         return [
-            'name' => 'Bodega ' . fake()->city(),
+            'name' => 'Bodega '.fake()->city(),
             'code' => $code,
             'location_address' => fake()->address(),
             'location_coords' => [

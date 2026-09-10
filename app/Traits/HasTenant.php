@@ -24,7 +24,7 @@ trait HasTenant
         static::creating(function ($model): void {
             if (empty($model->tenant_id)) {
                 $tenant = Tenant::current();
-                
+
                 // If no tenant is current, try to use demo tenant (for local dev)
                 if (! $tenant && ! config('multi-tenant.enabled')) {
                     $tenant = Tenant::query()->where('slug', 'demo')->first();
@@ -32,7 +32,7 @@ trait HasTenant
                         $tenant->makeCurrent();
                     }
                 }
-                
+
                 if ($tenant) {
                     $model->tenant_id = $tenant->id;
                 }

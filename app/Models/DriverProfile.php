@@ -14,13 +14,13 @@ use Illuminate\Support\Str;
  *
  * Extiende la tabla users con campos específicos para conductores (messengers).
  *
- * @property string      $id                UUID
- * @property int         $user_id           FK a users.id
- * @property string|null $license_number    Número de licencia de conducir
- * @property string|null $license_expiry    Fecha de vencimiento de licencia
+ * @property string $id UUID
+ * @property int $user_id FK a users.id
+ * @property string|null $license_number Número de licencia de conducir
+ * @property string|null $license_expiry Fecha de vencimiento de licencia
  * @property string|null $emergency_contact Nombre del contacto de emergencia
- * @property string|null $emergency_phone   Teléfono del contacto de emergencia
- * @property bool        $is_available      Disponible para asignar tareas
+ * @property string|null $emergency_phone Teléfono del contacto de emergencia
+ * @property bool $is_available Disponible para asignar tareas
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  */
@@ -48,11 +48,11 @@ class DriverProfile extends Model
     protected function casts(): array
     {
         return [
-            'phone'          => 'string',
+            'phone' => 'string',
             'license_expiry' => 'date',
-            'is_available'   => 'boolean',
-            'created_at'     => 'datetime',
-            'updated_at'     => 'datetime',
+            'is_available' => 'boolean',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
         ];
     }
 

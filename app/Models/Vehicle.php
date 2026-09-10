@@ -15,18 +15,18 @@ use Illuminate\Support\Str;
 /**
  * Modelo Vehicle - Transportes registrados por tenant.
  *
- * @property string      $id               UUID
- * @property string      $tenant_id        UUID del tenant
- * @property string      $license_plate    Matrícula/placa (única por tenant)
- * @property string      $type             internal | external
- * @property string      $brand            Marca (ej: Toyota)
- * @property string      $model            Modelo (ej: Hiace)
- * @property int         $year             Año de fabricación
- * @property float|null  $capacity_kg      Capacidad de carga en kg
- * @property string|null $capacity_volume  Descripción volumétrica
- * @property string|null $color            Color
- * @property bool        $is_active        Activo por defecto
- * @property string|null $notes            Notas
+ * @property string $id UUID
+ * @property string $tenant_id UUID del tenant
+ * @property string $license_plate Matrícula/placa (única por tenant)
+ * @property string $type internal | external
+ * @property string $brand Marca (ej: Toyota)
+ * @property string $model Modelo (ej: Hiace)
+ * @property int $year Año de fabricación
+ * @property float|null $capacity_kg Capacidad de carga en kg
+ * @property string|null $capacity_volume Descripción volumétrica
+ * @property string|null $color Color
+ * @property bool $is_active Activo por defecto
+ * @property string|null $notes Notas
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property \Carbon\Carbon|null $deleted_at
@@ -42,6 +42,7 @@ class Vehicle extends Model
     public $incrementing = false;
 
     public const TYPE_INTERNAL = 'internal';
+
     public const TYPE_EXTERNAL = 'external';
 
     public const TYPES = [
@@ -72,12 +73,12 @@ class Vehicle extends Model
     protected function casts(): array
     {
         return [
-            'year'            => 'integer',
-            'capacity_kg'     => 'decimal:2',
-            'is_active'       => 'boolean',
-            'created_at'      => 'datetime',
-            'updated_at'      => 'datetime',
-            'deleted_at'      => 'datetime',
+            'year' => 'integer',
+            'capacity_kg' => 'decimal:2',
+            'is_active' => 'boolean',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
         ];
     }
 

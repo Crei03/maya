@@ -23,11 +23,11 @@ class TenantFactory extends Factory
     public function definition(): array
     {
         return [
-            'id'            => (string) Str::uuid(),
-            'name'          => fake()->company(),
-            'slug'          => fake()->unique()->slug(),
+            'id' => (string) Str::uuid(),
+            'name' => fake()->company(),
+            'slug' => fake()->unique()->slug(),
             'contact_email' => fake()->unique()->safeEmail(),
-            'status'        => 'active',
+            'status' => 'active',
         ];
     }
 }

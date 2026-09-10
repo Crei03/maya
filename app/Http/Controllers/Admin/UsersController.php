@@ -15,8 +15,7 @@ class UsersController extends Controller
 {
     public function __construct(
         private readonly UsersService $usersService
-    ) {
-    }
+    ) {}
 
     public function index(): Response
     {
