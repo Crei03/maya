@@ -65,6 +65,7 @@ class ShipmentFactory extends Factory
         return $this->state(fn () => [
             'status' => Shipment::STATUS_IN_WAREHOUSE,
             'warehouse_id' => $warehouse->id,
+            'tenant_id' => $warehouse->tenant_id ?? Tenant::current()?->id,
         ]);
     }
 

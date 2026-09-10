@@ -14,6 +14,8 @@ use App\Services\ShipmentService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class ShipmentController extends Controller
 {
@@ -22,6 +24,14 @@ class ShipmentController extends Controller
     public function __construct(
         private readonly ShipmentService $service,
     ) {}
+
+    /**
+     * Renderizar la página de Gestión de Paquetes.
+     */
+    public function page(): Response
+    {
+        return Inertia::render('Admin/Paquetes/Index');
+    }
 
     /**
      * Listar envíos con paginación y filtros.
@@ -34,7 +44,7 @@ class ShipmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $result,
+            'data' => $result,
         ]);
     }
 
@@ -51,7 +61,7 @@ class ShipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data'    => $shipmentData,
+                'data' => $shipmentData,
             ]);
         } catch (ModelNotFoundException) {
             return response()->json([
@@ -72,7 +82,7 @@ class ShipmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $shipment,
+            'data' => $shipment,
             'message' => 'Paquete creado exitosamente',
         ], 201);
     }
@@ -89,7 +99,7 @@ class ShipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data'    => $updated,
+                'data' => $updated,
                 'message' => 'Paquete actualizado exitosamente',
             ]);
         } catch (ModelNotFoundException) {
