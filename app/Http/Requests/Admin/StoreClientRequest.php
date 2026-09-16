@@ -14,6 +14,30 @@ class StoreClientRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+        if ($this->has('first_name') && ! $this->has('nombre')) {
+            $merge['nombre'] = $this->input('first_name');
+        }
+        if ($this->has('last_name') && ! $this->has('apellido')) {
+            $merge['apellido'] = $this->input('last_name');
+        }
+        if ($this->has('street_name') && ! $this->has('calle')) {
+            $merge['calle'] = $this->input('street_name');
+        }
+        if ($this->has('street_number') && ! $this->has('numero')) {
+            $merge['numero'] = $this->input('street_number');
+        }
+        if ($this->has('postal_code') && ! $this->has('codigo_postal')) {
+            $merge['codigo_postal'] = $this->input('postal_code');
+        }
+
+        if (! empty($merge)) {
+            $this->merge($merge);
+        }
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -24,13 +48,18 @@ class StoreClientRequest extends FormRequest
         return [
             'nombre' => ['required', 'string', 'max:120'],
             'apellido' => ['required', 'string', 'max:120'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'email' => ['nullable', 'string', 'email', 'max:150'],
             'residencia_id' => ['nullable', 'integer', 'exists:catalogo_valores,id'],
             'provincia_id' => ['nullable', 'integer'],
             'distrito_id' => ['nullable', 'integer'],
             'corregimiento_id' => ['nullable', 'integer'],
-            'calle' => ['nullable', 'string', 'max:120'],
-            'numero' => ['required', 'string', 'max:40'],
+            'calle' => ['nullable', 'string', 'max:150'],
+            'numero' => ['nullable', 'string', 'max:40'],
+            'reference_point' => ['nullable', 'string', 'max:255'],
             'codigo_postal' => ['nullable', 'string', 'max:20'],
+            'destination_coords' => ['nullable', 'array'],
+            'status' => ['nullable', 'string', 'in:active,inactive'],
         ];
     }
 

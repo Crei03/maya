@@ -67,6 +67,7 @@ class ShipmentService
         $paginator->getCollection()->load([
             'warehouse:id,name',
             'driverTask:id,title,driver_id',
+            'sender:id,first_name,last_name,full_name,phone',
         ]);
 
         return [
@@ -100,7 +101,7 @@ class ShipmentService
             'warehouse',
             'driverTask',
             'sender',
-            'trackingEvents' => fn ($query) => $query->latest()->limit(50),
+            'trackingEvents' => fn ($query) => $query->latest('timestamp')->limit(50),
         ]);
 
         return $this->mapShipment($shipment);
@@ -186,9 +187,13 @@ class ShipmentService
 
         if ($shipment->relationLoaded('sender') && $shipment->sender) {
             $data['sender'] = $shipment->sender->toArray();
-            $data['recipient_name'] = $shipment->sender->full_name
-                ?? $shipment->sender->first_name.' '.$shipment->sender->last_name;
+            $data['client'] = $shipment->sender->toArray();
+            $clientName = $shipment->sender->full_name
+                ?? trim(($shipment->sender->first_name ?? '').' '.($shipment->sender->last_name ?? ''));
+            $data['recipient_name'] = $clientName;
+            $data['client_name'] = $clientName;
             $data['recipient_phone'] = $shipment->sender->phone ?? '';
+            $data['client_phone'] = $shipment->sender->phone ?? '';
         }
 
         if ($shipment->relationLoaded('trackingEvents')) {

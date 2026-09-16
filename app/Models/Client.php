@@ -46,6 +46,8 @@ class Client extends Authenticatable
         'calle_id',
         'street_name',
         'street_number',
+        'reference_point',
+        'destination_coords',
         'postal_code',
         'status',
         'avatar_url',
@@ -60,6 +62,7 @@ class Client extends Authenticatable
     {
         return [
             'password' => 'hashed',
+            'destination_coords' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
@@ -80,12 +83,44 @@ class Client extends Authenticatable
             if (empty($client->role)) {
                 $client->role = self::ROLE_CLIENT;
             }
+
+            if (empty($client->full_name)) {
+                $client->full_name = trim(($client->first_name ?? '').' '.($client->last_name ?? ''));
+            }
         });
+    }
+
+    /**
+     * Apply global tenant scope to all queries.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(new \App\Scopes\TenantScope);
     }
 
     public function scopeClients($query)
     {
         return $query->where('role', self::ROLE_CLIENT);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    public function scopeSearch($query, string $term)
+    {
+        $term = trim($term);
+
+        return $query->where(function ($q) use ($term): void {
+            $q->where('first_name', 'like', "%{$term}%")
+                ->orWhere('last_name', 'like', "%{$term}%")
+                ->orWhere('full_name', 'like', "%{$term}%")
+                ->orWhere('phone', 'like', "%{$term}%")
+                ->orWhere('email', 'like', "%{$term}%")
+                ->orWhere('street_name', 'like', "%{$term}%")
+                ->orWhere('reference_point', 'like', "%{$term}%");
+        });
     }
 
     public function residencia(): BelongsTo
