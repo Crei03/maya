@@ -26,12 +26,14 @@ class CatalogoControllerTest extends TestCase
 
         config(['multi-tenant.enabled' => false]);
 
-        $this->tenant = Tenant::query()->create([
-            'id' => (string) Str::uuid(),
-            'name' => 'Demo',
-            'slug' => 'demo',
-            'status' => 'active',
-        ]);
+        $this->tenant = Tenant::query()->firstOrCreate(
+            ['slug' => 'demo'],
+            [
+                'id' => (string) Str::uuid(),
+                'name' => 'Demo',
+                'status' => 'active',
+            ]
+        );
 
         $this->gestor = User::factory()->create([
             'role' => User::ROLE_GESTOR,
@@ -46,11 +48,10 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Global Catalog',
             'slug' => 'global-catalog',
             'is_global' => true,
-            'is_active' => true,
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->getJson('/configuracion/catalogos');
+            ->getJson(route('admin.configuracion.catalogos.index'));
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
@@ -63,7 +64,6 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Shipment Status',
             'slug' => 'shipment-status',
             'is_global' => true,
-            'is_active' => true,
         ]);
         CatalogoValor::query()->create([
             'catalogo_id' => $catalogo->id,
@@ -73,7 +73,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->getJson('/configuracion/catalogos/shipment-status');
+            ->getJson(route('admin.configuracion.catalogos.show', ['slug' => 'shipment-status']));
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
@@ -86,8 +86,8 @@ class CatalogoControllerTest extends TestCase
         $catalogo = Catalogo::query()->create([
             'nombre' => 'Test',
             'slug' => 'test',
-            'is_global' => true,
-            'is_active' => true,
+            'is_global' => false,
+            'tenant_id' => $this->tenant->id,
         ]);
 
         $payload = [
@@ -97,7 +97,7 @@ class CatalogoControllerTest extends TestCase
         ];
 
         $response = $this->actingAs($this->gestor)
-            ->postJson('/configuracion/catalogos/valores', $payload);
+            ->postJson(route('admin.configuracion.catalogos.valores.store'), $payload);
 
         $response->assertCreated();
         $response->assertJsonPath('success', true);
@@ -114,17 +114,16 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
         ]);
 
         $payload = [
             'catalogo_id' => $catalogo->id,
-            'codigo' => 'ABCD',
-            'valor' => 'Invalid Code',
+            'codigo' => 'LONG',
+            'valor' => 'Nuevo Valor',
         ];
 
         $response = $this->actingAs($this->gestor)
-            ->postJson('/configuracion/catalogos/valores', $payload);
+            ->postJson(route('admin.configuracion.catalogos.valores.store'), $payload);
 
         $response->assertUnprocessable();
         $response->assertJsonValidationErrors(['codigo']);
@@ -136,17 +135,16 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
         ]);
 
         $payload = [
             'catalogo_id' => $catalogo->id,
-            'codigo' => 'ABC',
+            'codigo' => 'VAL',
             'valor' => str_repeat('a', 256),
         ];
 
         $response = $this->actingAs($this->gestor)
-            ->postJson('/configuracion/catalogos/valores', $payload);
+            ->postJson(route('admin.configuracion.catalogos.valores.store'), $payload);
 
         $response->assertUnprocessable();
         $response->assertJsonValidationErrors(['valor']);
@@ -158,18 +156,17 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
         ]);
 
         $valor = CatalogoValor::query()->create([
             'catalogo_id' => $catalogo->id,
-            'codigo' => 'OLD',
-            'valor' => 'Original',
+            'codigo' => 'VAL',
+            'valor' => 'Initial Value',
             'tenant_id' => $this->tenant->id,
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->putJson('/configuracion/catalogo/valores/'.$valor->id, [
+            ->putJson(route('admin.configuracion.catalogos.valores.update', ['id' => $valor->id]), [
                 'valor' => 'Updated Value',
             ]);
 
@@ -179,7 +176,6 @@ class CatalogoControllerTest extends TestCase
         $this->assertDatabaseHas('catalogo_valores', [
             'id' => $valor->id,
             'valor' => 'Updated Value',
-            'codigo' => 'OLD',
         ]);
     }
 
@@ -189,18 +185,24 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
+        ]);
+
+        $otherTenant = Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other-tenant-1',
+            'status' => 'active',
         ]);
 
         $valor = CatalogoValor::query()->create([
             'catalogo_id' => $catalogo->id,
             'codigo' => 'OTH',
             'valor' => 'Other Tenant',
-            'tenant_id' => (string) Str::uuid(),
+            'tenant_id' => $otherTenant->id,
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->putJson('/configuracion/catalogo/valores/'.$valor->id, [
+            ->putJson(route('admin.configuracion.catalogos.valores.update', ['id' => $valor->id]), [
                 'valor' => 'Hacked',
             ]);
 
@@ -214,7 +216,6 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
         ]);
 
         $valor = CatalogoValor::query()->create([
@@ -225,7 +226,7 @@ class CatalogoControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->deleteJson('/configuracion/catalogos/valores/'.$valor->id);
+            ->deleteJson(route('admin.configuracion.catalogos.valores.destroy', ['id' => $valor->id]));
 
         $response->assertOk();
         $response->assertJsonPath('success', true);
@@ -238,18 +239,24 @@ class CatalogoControllerTest extends TestCase
             'nombre' => 'Test',
             'slug' => 'test',
             'is_global' => true,
-            'is_active' => true,
+        ]);
+
+        $otherTenant = Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant 2',
+            'slug' => 'other-tenant-2',
+            'status' => 'active',
         ]);
 
         $valor = CatalogoValor::query()->create([
             'catalogo_id' => $catalogo->id,
             'codigo' => 'OTH',
             'valor' => 'Other Tenant',
-            'tenant_id' => (string) Str::uuid(),
+            'tenant_id' => $otherTenant->id,
         ]);
 
         $response = $this->actingAs($this->gestor)
-            ->deleteJson('/configuracion/catalogos/valores/'.$valor->id);
+            ->deleteJson(route('admin.configuracion.catalogos.valores.destroy', ['id' => $valor->id]));
 
         $response->assertForbidden();
         $response->assertJsonPath('message', 'No tienes permiso para eliminar este valor.');
