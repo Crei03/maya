@@ -24,6 +24,8 @@ import {
     faCircleExclamation,
     faLocationDot,
     faChevronLeft,
+    faChevronRight,
+    faChevronUp,
     faChartPie,
     faInbox,
     faTruck,
@@ -32,6 +34,7 @@ import {
     faChevronDown,
     faArrowRight,
     faArrowLeft,
+    faMap,
     faPlus,
     faMinus,
     faPencil,
@@ -100,6 +103,9 @@ import {
     faHistory,
     faClockRotateLeft,
     faTableColumns,
+    faAddressBook,
+    faBuilding,
+    faMapPin,
 } from '@fortawesome/free-solid-svg-icons';
 
 // Importar iconos regulares (Regular)
@@ -146,6 +152,8 @@ library.add(
     faCircleExclamation,
     faLocationDot,
     faChevronLeft,
+    faChevronRight,
+    faChevronUp,
     faChartPie,
     faInbox,
     faTruck,
@@ -154,6 +162,7 @@ library.add(
     faChevronDown,
     faArrowRight,
     faArrowLeft,
+    faMap,
     faPlus,
     faMinus,
     faPencil,
@@ -222,6 +231,9 @@ library.add(
     faHistory,
     faClockRotateLeft,
     faTableColumns,
+    faAddressBook,
+    faBuilding,
+    faMapPin,
     // Regular
     faCircleRegular,
     faCalendarRegular,

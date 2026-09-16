@@ -4,14 +4,9 @@ import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import SettingsSectionButton from '@/Components/SettingsSectionButton.vue';
 
-const columnPreferenceModule = 'admin.clients';
 const activeSection = ref(null);
-const showFilters = ref(false);
-const currentPage = ref(1);
-const perPage = ref(15);
 
 const sections = [
-    { key: 'clientes', label: 'Clientes', icon: ['fas', 'user'], route: route('admin.configuracion.clientes') },
     { key: 'usuarios', label: 'Usuarios', icon: ['fas', 'users'], route: route('admin.configuracion.usuarios') },
     { key: 'transporte', label: 'Transporte', icon: ['fas', 'truck'], route: route('admin.configuracion.transportes') },
     { key: 'bodegas', label: 'Bodegas', icon: ['fas', 'warehouse'], route: route('admin.configuracion.bodegas') },

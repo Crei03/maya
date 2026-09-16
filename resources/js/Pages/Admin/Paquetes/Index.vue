@@ -24,7 +24,7 @@ const warehousesList = ref([]);
 const columns = [
     { key: 'tracking_number', label: 'Tracking' },
     { key: 'status', label: 'Estado' },
-    { key: 'recipient_name', label: 'Cliente Remitente' },
+    { key: 'recipient_name', label: 'Cliente' },
     { key: 'destination_address', label: 'Destino' },
     { key: 'warehouse_name', label: 'Bodega' },
     { key: 'package_type', label: 'Tipo' },
@@ -59,6 +59,7 @@ const form = reactive({
     sender_id: '',
     warehouse_id: '',
     destination_address: '',
+    destination_coords: '',
     package_type: 'caja',
     weight_lb: '',
     weight_kg: '',
@@ -67,6 +68,58 @@ const form = reactive({
     dimensions: '',
     status: 'pending',
 });
+
+// --- Búsqueda predictiva de Clientes / Directorio ---
+const clientSearchQuery = ref('');
+const clientSearchResults = ref([]);
+const isSearchingClients = ref(false);
+const selectedClient = ref(null);
+const showClientDropdown = ref(false);
+
+const searchClients = async () => {
+    if (!clientSearchQuery.value || clientSearchQuery.value.trim().length < 1) {
+        clientSearchResults.value = clientsList.value.slice(0, 10);
+        showClientDropdown.value = clientSearchResults.value.length > 0;
+        return;
+    }
+    isSearchingClients.value = true;
+    try {
+        const res = await window.axios.get(route('admin.clients.search'), {
+            params: {
+                q: clientSearchQuery.value.trim(),
+            },
+        });
+        clientSearchResults.value = res.data?.data || [];
+        showClientDropdown.value = true;
+    } catch {
+        clientSearchResults.value = [];
+    } finally {
+        isSearchingClients.value = false;
+    }
+};
+
+const selectClient = (client) => {
+    selectedClient.value = client;
+    form.sender_id = client.id;
+    const addr = client.direccion || [client.calle, client.street_name, client.street_number].filter(Boolean).join(' ');
+    const refPoint = client.reference_point ? ` (Ref: ${client.reference_point})` : '';
+    if (addr) {
+        form.destination_address = addr + refPoint;
+    }
+    if (client.destination_coords) {
+        form.destination_coords = typeof client.destination_coords === 'object' ? JSON.stringify(client.destination_coords) : client.destination_coords;
+    }
+    showClientDropdown.value = false;
+    clientSearchQuery.value = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.email || '';
+};
+
+const clearClient = () => {
+    selectedClient.value = null;
+    form.sender_id = '';
+    clientSearchQuery.value = '';
+    clientSearchResults.value = [];
+    showClientDropdown.value = false;
+};
 
 // --- Modal de Detalle / Timeline ---
 const detailOpen = ref(false);
@@ -152,9 +205,10 @@ const fetchAllShipmentsForExport = async () => {
 // --- Manejo del Formulario (Crear / Editar) ---
 const resetForm = () => {
     Object.assign(form, {
-        sender_id: clientsList.value[0]?.id || '',
+        sender_id: '',
         warehouse_id: warehousesList.value[0]?.id || '',
         destination_address: '',
+        destination_coords: '',
         package_type: 'caja',
         weight_lb: '',
         weight_kg: '',
@@ -165,6 +219,7 @@ const resetForm = () => {
     });
     editingId.value = null;
     formErrors.value = {};
+    clearClient();
 };
 
 const openCreateModal = () => {
@@ -184,6 +239,7 @@ const openEditModal = (shipment) => {
         sender_id: shipment.sender_id || shipment.sender?.id || '',
         warehouse_id: shipment.warehouse_id || shipment.warehouse?.id || '',
         destination_address: shipment.destination_address || '',
+        destination_coords: shipment.destination_coords ? (typeof shipment.destination_coords === 'object' ? JSON.stringify(shipment.destination_coords) : shipment.destination_coords) : '',
         package_type: shipment.package_type || 'caja',
         weight_lb: shipment.weight_lb || '',
         weight_kg: shipment.weight_kg || '',
@@ -192,6 +248,22 @@ const openEditModal = (shipment) => {
         dimensions: shipment.dimensions ? (typeof shipment.dimensions === 'object' ? JSON.stringify(shipment.dimensions) : shipment.dimensions) : '',
         status: shipment.status || 'pending',
     });
+
+    if (shipment.sender || shipment.client) {
+        const c = shipment.sender || shipment.client;
+        selectedClient.value = c;
+        clientSearchQuery.value = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || '';
+    } else if (shipment.sender_id) {
+        const found = clientsList.value.find(c => c.id === shipment.sender_id);
+        if (found) {
+            selectedClient.value = found;
+            clientSearchQuery.value = found.full_name || `${found.first_name || ''} ${found.last_name || ''}`.trim() || found.email || '';
+        } else {
+            clearClient();
+        }
+    } else {
+        clearClient();
+    }
 
     modalOpen.value = true;
 };
@@ -217,6 +289,7 @@ const saveShipment = async () => {
         sender_id: form.sender_id,
         warehouse_id: form.warehouse_id,
         destination_address: form.destination_address,
+        destination_coords: form.destination_coords || null,
         package_type: form.package_type,
         weight_lb: parseFloat(form.weight_lb) || 0,
         weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : null,
@@ -622,23 +695,8 @@ onMounted(async () => {
 
                 <div class="mt-4 space-y-4">
                     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Cliente Remitente *
-                            </label>
-                            <select
-                                v-model="form.sender_id"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
-                            >
-                                <option value="">Selecciona el remitente</option>
-                                <option v-for="c in clientsList" :key="c.id" :value="c.id">
-                                    {{ c.full_name || `${c.first_name} ${c.last_name}` }} ({{ c.phone || 'Sin tel' }})
-                                </option>
-                            </select>
-                            <p v-if="formErrors.sender_id" class="mt-1 text-xs text-red-500">{{ formErrors.sender_id[0] || formErrors.sender_id }}</p>
-                        </div>
-
-                        <div>
+                        <!-- Bodega de Origen -->
+                        <div class="sm:col-span-2">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
                                 Bodega de Origen *
                             </label>
@@ -652,6 +710,88 @@ onMounted(async () => {
                                 </option>
                             </select>
                             <p v-if="formErrors.warehouse_id" class="mt-1 text-xs text-red-500">{{ formErrors.warehouse_id[0] || formErrors.warehouse_id }}</p>
+                        </div>
+
+                        <!-- Cliente / Destinatario (Directorio Unificado) -->
+                        <div class="sm:col-span-2">
+                            <div class="flex items-center justify-between">
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Cliente / Destinatario *
+                                </label>
+                                <span class="text-[11px] text-[var(--maya-text-muted)]">Busca en el directorio para autocompletar</span>
+                            </div>
+
+                            <div class="relative mt-1">
+                                <div class="flex items-center gap-2">
+                                    <div class="relative flex-1">
+                                        <input
+                                            v-model="clientSearchQuery"
+                                            type="text"
+                                            placeholder="Buscar cliente por nombre, teléfono, email..."
+                                            class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] pl-8 pr-8 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                            @input="searchClients"
+                                            @focus="searchClients"
+                                        />
+                                        <font-awesome-icon :icon="['fas', 'user']" class="absolute left-2.5 top-2.5 text-xs text-[var(--maya-text-muted)]" />
+                                        <button
+                                            v-if="clientSearchQuery"
+                                            type="button"
+                                            class="absolute right-2.5 top-2 text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
+                                            @click="clearClient"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'xmark']" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Dropdown con resultados predictivos de clientes -->
+                                <div
+                                    v-if="showClientDropdown && clientSearchResults.length"
+                                    class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] shadow-lg"
+                                >
+                                    <div
+                                        v-for="c in clientSearchResults"
+                                        :key="c.id"
+                                        class="cursor-pointer border-b border-[var(--maya-border)] p-2.5 text-xs hover:bg-[var(--maya-hover-surface)] transition-colors last:border-b-0"
+                                        @click="selectClient(c)"
+                                    >
+                                        <div class="flex items-center justify-between font-semibold text-[var(--maya-text-main)]">
+                                            <span>{{ c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email }}</span>
+                                            <span class="font-mono text-[11px] text-[var(--maya-primary)]">{{ c.phone }}</span>
+                                        </div>
+                                        <p v-if="c.direccion || c.street_name" class="text-[11px] text-[var(--maya-text-muted)] truncate mt-0.5">
+                                            📍 {{ c.direccion || c.street_name }}
+                                            <span v-if="c.reference_point"> (Ref: {{ c.reference_point }})</span>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div
+                                    v-else-if="showClientDropdown && isSearchingClients"
+                                    class="absolute z-20 mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-3 text-center text-xs text-[var(--maya-text-muted)] shadow-lg"
+                                >
+                                    Buscando clientes...
+                                </div>
+                            </div>
+
+                            <!-- Card resumen de cliente seleccionado -->
+                            <div v-if="selectedClient" class="mt-1.5 flex items-center justify-between rounded-lg bg-[var(--maya-primary-alpha)] border border-[var(--maya-primary)] px-2.5 py-1.5 text-xs text-[var(--maya-primary)]">
+                                <div class="flex items-center gap-2">
+                                    <font-awesome-icon :icon="['fas', 'check']" class="text-xs" />
+                                    <span>
+                                        Cliente: <strong>{{ selectedClient.full_name || `${selectedClient.first_name || ''} ${selectedClient.last_name || ''}`.trim() || selectedClient.email }}</strong>
+                                        <span v-if="selectedClient.phone" class="font-mono ml-1">({{ selectedClient.phone }})</span>
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="text-[11px] font-semibold underline hover:opacity-80"
+                                    @click="clearClient"
+                                >
+                                    Cambiar
+                                </button>
+                            </div>
+                            <p v-if="formErrors.sender_id" class="mt-1 text-xs text-red-500">{{ formErrors.sender_id[0] || formErrors.sender_id }}</p>
                         </div>
 
                         <div class="sm:col-span-2">
@@ -819,7 +959,7 @@ onMounted(async () => {
                     <!-- Ficha resumen -->
                     <div class="grid grid-cols-2 gap-3 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-4 text-xs sm:grid-cols-4">
                         <div>
-                            <span class="text-[var(--maya-text-muted)]">Remitente:</span>
+                            <span class="text-[var(--maya-text-muted)]">Cliente:</span>
                             <p class="font-bold text-[var(--maya-text-main)]">{{ detailShipment.recipient_name || detailShipment.sender?.full_name || 'N/A' }}</p>
                             <p v-if="detailShipment.recipient_phone" class="text-[11px] text-[var(--maya-text-muted)]">📞 {{ detailShipment.recipient_phone }}</p>
                         </div>
@@ -842,6 +982,9 @@ onMounted(async () => {
                         <span class="font-semibold text-[var(--maya-text-muted)]">Dirección de Entrega:</span>
                         <p class="mt-1 text-sm font-medium text-[var(--maya-text-main)]">
                             📍 {{ detailShipment.destination_address }}
+                        </p>
+                        <p v-if="detailShipment.sender?.reference_point" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                            📌 Punto de referencia del cliente: {{ detailShipment.sender.reference_point }}
                         </p>
                     </div>
 
