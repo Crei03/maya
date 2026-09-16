@@ -13,9 +13,9 @@ class SettingsController extends Controller
         return Inertia::render('Admin/Configuracion');
     }
 
-    public function clients(): Response
+    public function clients()
     {
-        return Inertia::render('Admin/Configuracion/Client');
+        return redirect()->route('admin.clientes');
     }
 
     public function users(): Response

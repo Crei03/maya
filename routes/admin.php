@@ -56,12 +56,14 @@ Route::middleware(['auth', 'tenant', 'gestor'])
         Route::get('/paquetes', [ShipmentController::class, 'page'])
             ->name('admin.paquetes');
 
+        // Directorio de Clientes
+        Route::get('/clientes', [ClientController::class, 'page'])
+            ->name('admin.clientes');
+        Route::redirect('/configuracion/clientes', '/clientes');
+
         // Configuración Admin
         Route::get('/configuracion', [SettingsController::class, 'index'])
             ->name('admin.configuracion');
-
-        Route::get('/configuracion/clientes', [SettingsController::class, 'clients'])
-            ->name('admin.configuracion.clientes');
 
         Route::get('/configuracion/usuarios', [SettingsController::class, 'users'])
             ->name('admin.configuracion.usuarios');
@@ -118,16 +120,16 @@ Route::middleware(['auth', 'tenant', 'gestor'])
 
             Route::get('/clients', [ClientController::class, 'list'])
                 ->name('admin.clients.list');
-
-            Route::get('/clients/{id}', [ClientController::class, 'show'])
-                ->name('admin.clients.show');
-
+            Route::get('/clients/search', [ClientController::class, 'search'])
+                ->name('admin.clients.search');
             Route::post('/clients', [ClientController::class, 'store'])
                 ->name('admin.clients.store');
-
+            Route::get('/clients/{id}', [ClientController::class, 'show'])
+                ->name('admin.clients.show');
+            Route::get('/clients/{id}/history', [ClientController::class, 'history'])
+                ->name('admin.clients.history');
             Route::patch('/clients/{id}', [ClientController::class, 'update'])
                 ->name('admin.clients.update');
-
             Route::delete('/clients/{id}', [ClientController::class, 'destroy'])
                 ->name('admin.clients.destroy');
 

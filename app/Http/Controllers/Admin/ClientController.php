@@ -19,11 +19,16 @@ class ClientController extends Controller
     ) {}
 
     /**
-     * Render settings page.
+     * Render the clients directory page.
      */
+    public function page(): Response
+    {
+        return Inertia::render('Admin/Clientes/Index');
+    }
+
     public function index(): Response
     {
-        return Inertia::render('Admin/Configuracion');
+        return $this->page();
     }
 
     /**
@@ -92,6 +97,35 @@ class ClientController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Cliente eliminado correctamente.',
+        ]);
+    }
+
+    /**
+     * Predictive search for clients (autocomplete).
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $term = (string) ($request->input('q') ?? $request->input('search') ?? '');
+        $limit = $request->integer('limit') ?: 20;
+
+        $results = $this->clientService->search($term, $limit);
+
+        return response()->json([
+            'success' => true,
+            'data' => $results,
+        ]);
+    }
+
+    /**
+     * Get delivery history for a client.
+     */
+    public function history(string $id): JsonResponse
+    {
+        $data = $this->clientService->deliveryHistory($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => $data,
         ]);
     }
 
