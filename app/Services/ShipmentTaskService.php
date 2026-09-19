@@ -155,6 +155,16 @@ class ShipmentTaskService
                         $newShipment['tracking_number'] = Shipment::generateTrackingNumber();
                     }
 
+                    if (! empty($newShipment['sender_id']) && empty($newShipment['recipient_name'])) {
+                        $client = \App\Models\Client::find($newShipment['sender_id']);
+                        if ($client) {
+                            $newShipment['recipient_name'] = $client->full_name ?? trim(($client->first_name ?? '').' '.($client->last_name ?? ''));
+                            if (empty($newShipment['recipient_phone'])) {
+                                $newShipment['recipient_phone'] = $client->phone;
+                            }
+                        }
+                    }
+
                     $shipment = Shipment::create($newShipment);
                     $shipmentId = $shipment->id;
                 } elseif (! empty($itemData['shipment_id'] ?? null)) {
@@ -655,13 +665,19 @@ class ShipmentTaskService
                     'shipment' => $shipment ? [
                         'id' => $shipment->id,
                         'tracking_number' => $shipment->tracking_number,
+                        'reference_type' => $shipment->reference_type,
+                        'reference_number' => $shipment->reference_number,
+                        'lpn_code' => $shipment->lpn_code,
+                        'pieces_count' => $shipment->pieces_count ?? 1,
                         'package_type' => $shipment->package_type,
                         'weight_lb' => $shipment->weight_lb,
                         'weight_kg' => $shipment->weight_kg,
                         'destination_address' => $shipment->destination_address,
                         'status' => $shipment->status,
-                        'sender_name' => $shipment->sender ? ($shipment->sender->full_name ?? ($shipment->sender->first_name.' '.$shipment->sender->last_name)) : 'Sin cliente',
-                        'sender_phone' => $shipment->sender?->phone ?? '',
+                        'recipient_name' => $shipment->recipient_name ?: ($shipment->sender ? ($shipment->sender->full_name ?? ($shipment->sender->first_name.' '.$shipment->sender->last_name)) : 'Sin destinatario'),
+                        'recipient_phone' => $shipment->recipient_phone ?: ($shipment->sender?->phone ?? ''),
+                        'sender_name' => $shipment->recipient_name ?: ($shipment->sender ? ($shipment->sender->full_name ?? ($shipment->sender->first_name.' '.$shipment->sender->last_name)) : 'Sin cliente'),
+                        'sender_phone' => $shipment->recipient_phone ?: ($shipment->sender?->phone ?? ''),
                     ] : null,
                 ];
             })->all();

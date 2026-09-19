@@ -67,6 +67,10 @@ const quickStopForm = reactive({
     weight_lb: '',
     content_description: '',
     priority: 'media',
+    reference_type: 'pedido',
+    reference_number: '',
+    lpn_code: '',
+    pieces_count: 1,
 });
 
 // Modal de Detalle
@@ -248,6 +252,10 @@ const resetQuickStopForm = () => {
         weight_lb: '',
         content_description: '',
         priority: 'media',
+        reference_type: 'pedido',
+        reference_number: '',
+        lpn_code: '',
+        pieces_count: 1,
     });
 };
 
@@ -295,12 +303,22 @@ const addQuickStop = () => {
         recipient_phone: quickStopForm.recipient_phone || senderObj?.phone || '',
         package_type: quickStopForm.package_type,
         sender_name: clientName,
+        reference_type: quickStopForm.reference_type || '',
+        reference_number: quickStopForm.reference_number || '',
+        lpn_code: quickStopForm.lpn_code || '',
+        pieces_count: parseInt(quickStopForm.pieces_count) || 1,
         new_shipment: {
-            sender_id: quickStopForm.sender_id,
+            sender_id: quickStopForm.sender_id || null,
+            recipient_name: quickStopForm.recipient_name || clientName,
+            recipient_phone: quickStopForm.recipient_phone || senderObj?.phone || null,
             destination_address: quickStopForm.destination_address,
             package_type: quickStopForm.package_type,
             weight_lb: weight,
-            content_description: quickStopForm.content_description,
+            content_description: quickStopForm.content_description || null,
+            reference_type: quickStopForm.reference_type || null,
+            reference_number: quickStopForm.reference_number || null,
+            lpn_code: quickStopForm.lpn_code || null,
+            pieces_count: parseInt(quickStopForm.pieces_count) || 1,
         },
     };
 
@@ -326,11 +344,15 @@ const importWarehouseShipment = (shipment) => {
         stop_order: wizardForm.items.length + 1,
         weight_lb: shipment.weight_lb || 0,
         destination_address: shipment.destination_address,
-        recipient_name: shipment.recipient_name || 'Destinatario',
-        recipient_phone: shipment.recipient_phone || '',
+        recipient_name: shipment.recipient_name || shipment.client_name || 'Destinatario',
+        recipient_phone: shipment.recipient_phone || shipment.client_phone || '',
         package_type: shipment.package_type || 'paquete',
-        sender_name: shipment.sender?.full_name || 'Cliente bodega',
+        sender_name: shipment.sender?.full_name || shipment.recipient_name || 'Cliente bodega',
         tracking_number: shipment.tracking_number,
+        reference_type: shipment.reference_type || '',
+        reference_number: shipment.reference_number || '',
+        lpn_code: shipment.lpn_code || '',
+        pieces_count: shipment.pieces_count || 1,
     };
 
     insertStopByPriority(newStop);
@@ -1269,6 +1291,36 @@ onUnmounted(() => {
                                     </div>
                                 </div>
 
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">N° Pedido / Doc</label>
+                                        <input
+                                            v-model="quickStopForm.reference_number"
+                                            type="text"
+                                            placeholder="Ej: PED-1002"
+                                            class="mt-1 w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 text-xs font-mono text-[var(--maya-text-main)] focus:outline-none"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">LPN / Bultos</label>
+                                        <div class="mt-1 flex gap-1">
+                                            <input
+                                                v-model="quickStopForm.lpn_code"
+                                                type="text"
+                                                placeholder="LPN-..."
+                                                class="w-2/3 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2 py-1.5 text-xs font-mono text-[var(--maya-text-main)] focus:outline-none"
+                                            />
+                                            <input
+                                                v-model="quickStopForm.pieces_count"
+                                                type="number"
+                                                min="1"
+                                                class="w-1/3 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-1 py-1.5 text-center text-xs font-mono font-bold text-[var(--maya-text-main)] focus:outline-none"
+                                                title="Cantidad de bultos"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Dirección de Entrega *</label>
                                     <input
@@ -1360,7 +1412,7 @@ onUnmounted(() => {
                                 >
                                     <option value="">Selecciona para agregar a la ruta...</option>
                                     <option v-for="s in availableWarehouseShipments" :key="s.id" :value="s.id">
-                                        {{ s.tracking_number }} - {{ s.destination_address }} ({{ s.weight_lb }} lbs)
+                                        {{ s.lpn_code ? `[LPN: ${s.lpn_code}] ` : '' }}{{ s.reference_number ? `[${s.reference_type ? s.reference_type.toUpperCase() : 'DOC'}: ${s.reference_number}] ` : '' }}{{ s.tracking_number }} - {{ s.recipient_name || s.client_name || s.sender?.full_name || 'Destinatario' }} - {{ s.destination_address }} ({{ (s.pieces_count || 1) > 1 ? `${s.pieces_count} bultos · ` : '' }}{{ s.weight_lb }} lbs)
                                     </option>
                                 </select>
                             </div>
@@ -1404,9 +1456,15 @@ onUnmounted(() => {
                                         </span>
 
                                         <div>
-                                            <div class="flex items-center gap-2">
+                                            <div class="flex flex-wrap items-center gap-2">
                                                 <span class="text-xs font-bold text-[var(--maya-text-main)]">
                                                     {{ item.recipient_name }}
+                                                </span>
+                                                <span v-if="item.lpn_code || item.shipment?.lpn_code" class="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                    LPN: {{ item.lpn_code || item.shipment?.lpn_code }}
+                                                </span>
+                                                <span v-if="item.reference_number || item.shipment?.reference_number" class="rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                                                    {{ (item.reference_type || item.shipment?.reference_type || 'Doc').toUpperCase() }}: {{ item.reference_number || item.shipment?.reference_number }}
                                                 </span>
                                                 <!-- Badge de prioridad -->
                                                 <span
@@ -1416,10 +1474,10 @@ onUnmounted(() => {
                                                     {{ item.priority }}
                                                 </span>
                                                 <span class="font-mono text-[11px] text-[var(--maya-text-muted)]">
-                                                    {{ item.weight_lb }} lbs ({{ item.package_type }})
+                                                    {{ (item.pieces_count || item.shipment?.pieces_count || 1) > 1 ? `${item.pieces_count || item.shipment?.pieces_count} bultos · ` : '' }}{{ item.weight_lb }} lbs ({{ item.package_type }})
                                                 </span>
                                             </div>
-                                            <p class="text-xs text-[var(--maya-text-muted)]">
+                                            <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
                                                 📍 {{ item.destination_address }}
                                             </p>
                                         </div>
@@ -1548,6 +1606,12 @@ onUnmounted(() => {
                                 <div class="flex items-center gap-2">
                                     <span class="font-bold text-[var(--maya-primary)]">#{{ item.stop_order }}</span>
                                     <span class="font-semibold text-[var(--maya-text-main)]">{{ item.recipient_name }}</span>
+                                    <span v-if="item.lpn_code || item.shipment?.lpn_code" class="rounded bg-emerald-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                        LPN: {{ item.lpn_code || item.shipment?.lpn_code }}
+                                    </span>
+                                    <span v-if="item.reference_number || item.shipment?.reference_number" class="rounded bg-sky-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                                        {{ (item.reference_type || item.shipment?.reference_type || 'Doc').toUpperCase() }}: {{ item.reference_number || item.shipment?.reference_number }}
+                                    </span>
                                     <span class="text-[var(--maya-text-muted)]">- {{ item.destination_address }}</span>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -1703,7 +1767,13 @@ onUnmounted(() => {
                                     </span>
                                     <div>
                                         <div class="flex flex-wrap items-center gap-2">
-                                            <span class="font-bold text-[var(--maya-text-main)]">{{ item.shipment?.sender_name || 'Destinatario' }}</span>
+                                            <span class="font-bold text-[var(--maya-text-main)]">{{ item.shipment?.recipient_name || item.shipment?.sender_name || 'Destinatario' }}</span>
+                                            <span v-if="item.shipment?.lpn_code" class="rounded bg-emerald-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                                LPN: {{ item.shipment.lpn_code }}
+                                            </span>
+                                            <span v-if="item.shipment?.reference_number" class="rounded bg-sky-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                                                {{ (item.shipment?.reference_type || 'Doc').toUpperCase() }}: {{ item.shipment.reference_number }}
+                                            </span>
                                             <span
                                                 class="rounded px-1.5 py-0.2 text-[10px] font-bold uppercase"
                                                 :class="item.priority === 'alta' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : item.priority === 'media' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
@@ -1714,7 +1784,7 @@ onUnmounted(() => {
                                                 {{ item.shipment?.tracking_number }}
                                             </span>
                                             <span v-if="item.shipment?.weight_lb" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
-                                                ({{ item.shipment.weight_lb }} lbs)
+                                                {{ (item.shipment?.pieces_count || 1) > 1 ? `${item.shipment.pieces_count} bultos · ` : '' }}({{ item.shipment.weight_lb }} lbs)
                                             </span>
                                         </div>
                                         <p class="text-[var(--maya-text-muted)] mt-0.5">

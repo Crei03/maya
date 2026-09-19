@@ -32,14 +32,20 @@ class StoreShipmentTaskWizardRequest extends FormRequest
             'items.*.stop_order' => ['required', 'integer', 'min:1'],
             'items.*.shipment_id' => ['nullable', 'string', 'exists:shipments,id'],
             'items.*.new_shipment' => ['nullable', 'array'],
-            'items.*.new_shipment.sender_id' => ['required_with:items.*.new_shipment', 'string', 'exists:clients,id'],
+            'items.*.new_shipment.sender_id' => ['nullable', 'string', 'exists:clients,id'],
+            'items.*.new_shipment.recipient_name' => ['nullable', 'string', 'max:255'],
+            'items.*.new_shipment.recipient_phone' => ['nullable', 'string', 'max:50'],
             'items.*.new_shipment.destination_address' => ['required_with:items.*.new_shipment', 'string', 'max:500'],
             'items.*.new_shipment.package_type' => ['required_with:items.*.new_shipment', 'string', 'max:100'],
             'items.*.new_shipment.weight_lb' => ['required_with:items.*.new_shipment', 'numeric', 'min:0'],
             'items.*.new_shipment.weight_kg' => ['nullable', 'numeric', 'min:0'],
+            'items.*.new_shipment.reference_type' => ['nullable', 'string', 'max:50'],
+            'items.*.new_shipment.reference_number' => ['nullable', 'string', 'max:100'],
+            'items.*.new_shipment.lpn_code' => ['nullable', 'string', 'max:100'],
+            'items.*.new_shipment.pieces_count' => ['nullable', 'integer', 'min:1'],
             'items.*.new_shipment.content_description' => ['nullable', 'string', 'max:500'],
             'items.*.new_shipment.dimensions' => ['nullable', 'string', 'max:255'],
-            'items.*.new_shipment.destination_coords' => ['nullable', 'string', 'max:255'],
+            'items.*.new_shipment.destination_coords' => ['nullable'],
         ];
     }
 
@@ -80,6 +86,13 @@ class StoreShipmentTaskWizardRequest extends FormRequest
                     $validator->errors()->add(
                         "items.{$index}",
                         'La parada #'.($index + 1).' debe especificar un paquete existente o los datos de un nuevo paquete.'
+                    );
+                }
+
+                if ($hasNew && empty($item['new_shipment']['sender_id']) && empty($item['new_shipment']['recipient_name'])) {
+                    $validator->errors()->add(
+                        "items.{$index}.new_shipment.sender_id",
+                        'La parada #'.($index + 1).' debe especificar un cliente remitente o el nombre del destinatario.'
                     );
                 }
             }
