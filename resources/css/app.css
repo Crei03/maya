@@ -122,3 +122,30 @@ body {
 
 .text-primary { color: var(--maya-primary); }
 .bg-primary-light { background-color: var(--maya-primary-alpha); }
+
+/* =========================================
+   SCROLLBAR PERSONALIZADO PARA TABLAS
+   ========================================= */
+.table-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--maya-border) transparent;
+}
+
+.table-scrollbar::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.table-scrollbar::-webkit-scrollbar-track {
+  background: var(--maya-bg-surface);
+  border-radius: 4px;
+}
+
+.table-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--maya-border);
+  border-radius: 4px;
+}
+
+.table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: var(--maya-text-muted);
+}

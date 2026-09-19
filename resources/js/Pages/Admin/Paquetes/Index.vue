@@ -22,23 +22,31 @@ const warehousesList = ref([]);
 
 // --- Columnas y preferencias ---
 const columns = [
-    { key: 'tracking_number', label: 'Tracking' },
-    { key: 'status', label: 'Estado' },
-    { key: 'reference_info', label: 'Doc / LPN WMS' },
-    { key: 'recipient_name', label: 'Destinatario' },
-    { key: 'destination_address', label: 'Destino' },
-    { key: 'pieces_count', label: 'Bultos' },
-    { key: 'warehouse_name', label: 'Bodega' },
-    { key: 'package_type', label: 'Tipo' },
-    { key: 'weight_lb', label: 'Peso (lbs)' },
-    { key: 'task_title', label: 'Tarea / Ruta' },
-    { key: 'created_at', label: 'Registrado' },
-    { key: 'actions', label: 'Acciones' },
+    { key: 'tracking_number', label: 'Tracking', class: 'whitespace-nowrap min-w-[170px]' },
+    { key: 'status', label: 'Estado', class: 'whitespace-nowrap min-w-[130px]' },
+    { key: 'task_title', label: 'Plan de Ruta', class: 'whitespace-nowrap min-w-[160px]' },
+    { key: 'reference_info', label: 'Documento', class: 'whitespace-nowrap min-w-[170px]' },
+    { key: 'recipient_name', label: 'Destinatario', class: 'min-w-[220px]' },
+    { key: 'destination_address', label: 'Destino', class: 'min-w-[280px]' },
+    { key: 'pieces_count', label: 'Bultos', class: 'whitespace-nowrap min-w-[95px] text-center', headerClass: 'text-center' },
+    { key: 'warehouse_name', label: 'Bodega', class: 'whitespace-nowrap min-w-[150px]' },
+    { key: 'package_type', label: 'Tipo', class: 'whitespace-nowrap min-w-[110px]' },
+    { key: 'weight_lb', label: 'Peso (lbs)', class: 'whitespace-nowrap min-w-[125px]' },
+    { key: 'created_at', label: 'Registrado', class: 'whitespace-nowrap min-w-[140px]' },
+    { key: 'actions', label: 'Acciones', class: 'whitespace-nowrap min-w-[120px] text-right', headerClass: 'text-right' },
 ];
 
 const defaultVisibleColumns = columns.map((c) => c.key);
 const visibleColumns = ref([...defaultVisibleColumns]);
 const savingColumnPreference = ref(false);
+
+const tableMinClass = computed(() => {
+    const count = visibleColumns.value.length || columns.length;
+    if (count >= 10) return 'min-w-[1800px]';
+    if (count >= 7) return 'min-w-[1300px]';
+    if (count >= 5) return 'min-w-[950px]';
+    return 'min-w-full';
+});
 
 // --- Filtros ---
 const showFilters = ref(false);
@@ -533,6 +541,18 @@ const formatDate = (dateStr) => {
     }
 };
 
+// Conversión de peso a kilogramos
+const formatWeightKg = (lb, kg) => {
+    if (kg !== null && kg !== undefined && kg !== '' && !isNaN(kg) && Number(kg) > 0) {
+        return `${Number(kg).toFixed(2)} kg`;
+    }
+    const valLb = parseFloat(lb);
+    if (!isNaN(valLb) && valLb > 0) {
+        return `${(valLb / 2.20462).toFixed(2)} kg`;
+    }
+    return '0.00 kg';
+};
+
 onMounted(async () => {
     await fetchCatalogs();
     await fetchColumnPreferences();
@@ -559,7 +579,7 @@ onMounted(async () => {
                             <h1 class="text-xl font-bold text-[var(--maya-text-main)]">Gestión de Envíos y Paquetes</h1>
                         </div>
                         <p class="mt-1 text-sm text-[var(--maya-text-muted)]">
-                            Recepción ágil de WMS, trazabilidad de bultos/LPNs y seguimiento de entregas.
+                            Registro de paquetes, control de envíos y seguimiento de entregas.
                         </p>
                     </div>
 
@@ -706,6 +726,17 @@ onMounted(async () => {
 
             <!-- Tabla de Envíos -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--maya-border)] pb-3">
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-bold text-[var(--maya-text-main)]">
+                            Listado de Envíos
+                        </h3>
+                        <span v-if="pagination?.total !== undefined" class="rounded-full bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
+                            {{ pagination.total }} {{ pagination.total === 1 ? 'paquete' : 'paquetes' }}
+                        </span>
+                    </div>
+                </div>
+
                 <DataTable
                     :columns="columns"
                     :rows="shipments"
@@ -713,14 +744,15 @@ onMounted(async () => {
                     :pagination="pagination"
                     :per-page="perPage"
                     :visible-columns="visibleColumns"
+                    :table-class="tableMinClass"
                     empty-text="No hay envíos registrados todavía."
                     @update:per-page="handlePerPageChange"
                     @change-page="fetchShipments"
                 >
                     <!-- Tracking Number y LPN -->
                     <template #cell-tracking_number="{ row }">
-                        <div class="flex flex-col">
-                            <span class="font-mono text-xs font-bold text-[var(--maya-primary)]">
+                        <div class="flex flex-col whitespace-nowrap">
+                            <span class="font-mono text-xs font-bold text-[var(--maya-primary)] tracking-wide">
                                 {{ row.tracking_number }}
                             </span>
                             <span v-if="row.lpn_code" class="mt-0.5 inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
@@ -733,7 +765,7 @@ onMounted(async () => {
                     <!-- Estado -->
                     <template #cell-status="{ row }">
                         <span
-                            class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                            class="inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"
                             :class="{
                                 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': row.status === 'pending',
                                 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': row.status === 'in_warehouse',
@@ -748,88 +780,102 @@ onMounted(async () => {
                         </span>
                     </template>
 
-                    <!-- Doc / LPN WMS -->
+                    <!-- Plan de Ruta -->
+                    <template #cell-task_title="{ row }">
+                        <span v-if="row.task_title || row.assigned_task?.title" class="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-black dark:text-white whitespace-nowrap">
+                            <font-awesome-icon :icon="['fas', 'route']" class="text-[10px] text-[var(--maya-text-muted)]" />
+                            {{ row.task_title || row.assigned_task?.title }}
+                        </span>
+                        <span v-else class="text-xs text-[var(--maya-text-muted)] whitespace-nowrap">Sin asignar</span>
+                    </template>
+
+                    <!-- Documento -->
                     <template #cell-reference_info="{ row }">
-                        <div class="flex flex-col text-xs">
+                        <div class="text-xs whitespace-nowrap">
                             <span v-if="row.reference_number" class="font-medium text-[var(--maya-text-main)]">
                                 <span class="text-[10px] uppercase text-[var(--maya-text-muted)]">{{ row.reference_type || 'DOC' }}:</span>
                                 <strong class="ml-1 font-mono">{{ row.reference_number }}</strong>
                             </span>
-                            <span v-if="row.lpn_code" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
-                                LPN: {{ row.lpn_code }}
-                            </span>
-                            <span v-if="!row.reference_number && !row.lpn_code" class="text-[var(--maya-text-muted)]">-</span>
+                            <span v-else class="text-[var(--maya-text-muted)]">-</span>
                         </div>
                     </template>
 
                     <!-- Destinatario -->
                     <template #cell-recipient_name="{ row }">
                         <div class="flex flex-col">
-                            <span class="font-medium text-[var(--maya-text-main)]">
+                            <span class="font-medium text-[var(--maya-text-main)] leading-snug">
                                 {{ row.recipient_name || row.sender?.full_name || 'Sin destinatario' }}
                             </span>
-                            <span v-if="row.recipient_phone || row.sender?.phone" class="font-mono text-[11px] text-[var(--maya-text-muted)]">
-                                📞 {{ row.recipient_phone || row.sender?.phone }}
+                            <span v-if="row.recipient_phone || row.sender?.phone" class="font-mono text-[11px] text-[var(--maya-text-muted)] mt-0.5">
+                                {{ row.recipient_phone || row.sender?.phone }}
                             </span>
                         </div>
                     </template>
 
                     <!-- Destino -->
                     <template #cell-destination_address="{ row }">
-                        <span class="text-xs text-[var(--maya-text-muted)] line-clamp-1" :title="row.destination_address">
-                            📍 {{ row.destination_address }}
-                        </span>
+                        <div class="text-xs text-[var(--maya-text-muted)] leading-relaxed" :title="row.destination_address">
+                            {{ row.destination_address }}
+                        </div>
                     </template>
 
                     <!-- Bultos -->
                     <template #cell-pieces_count="{ row }">
-                        <span class="inline-flex items-center gap-1 rounded-md bg-[var(--maya-hover-surface)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--maya-text-main)]">
-                            <font-awesome-icon :icon="['fas', 'box']" class="text-[10px] text-[var(--maya-text-muted)]" />
-                            {{ row.pieces_count || 1 }}
-                        </span>
+                        <div class="flex justify-center">
+                            <span class="inline-flex items-center gap-1.5 rounded-md bg-[var(--maya-hover-surface)] px-2.5 py-0.5 font-mono text-xs font-semibold text-[var(--maya-text-main)]">
+                                <font-awesome-icon :icon="['fas', 'box']" class="text-[10px] text-[var(--maya-text-muted)]" />
+                                {{ row.pieces_count || 1 }}
+                            </span>
+                        </div>
                     </template>
 
                     <!-- Bodega -->
                     <template #cell-warehouse_name="{ row }">
-                        <span class="text-xs text-[var(--maya-text-main)]">
+                        <span class="text-xs text-[var(--maya-text-main)] whitespace-nowrap">
                             {{ row.warehouse_name || row.warehouse?.name || '-' }}
                         </span>
                     </template>
 
                     <!-- Tipo -->
                     <template #cell-package_type="{ row }">
-                        <span class="capitalize text-xs text-[var(--maya-text-muted)]">
+                        <span class="capitalize text-xs text-[var(--maya-text-muted)] whitespace-nowrap">
                             {{ row.package_type || '-' }}
                         </span>
                     </template>
 
-                    <!-- Peso en libras -->
+                    <!-- Peso en libras con tooltip de conversión a kg -->
                     <template #cell-weight_lb="{ row }">
-                        <span class="font-mono text-xs font-semibold">{{ row.weight_lb }} lbs</span>
-                    </template>
-
-                    <!-- Tarea / Ruta -->
-                    <template #cell-task_title="{ row }">
-                        <span v-if="row.task_title || row.assigned_task?.title" class="inline-flex items-center gap-1 font-mono text-xs font-bold text-[var(--maya-primary)]">
-                            <font-awesome-icon :icon="['fas', 'route']" class="text-[10px]" />
-                            {{ row.task_title || row.assigned_task?.title }}
-                        </span>
-                        <span v-else class="text-xs text-[var(--maya-text-muted)]">Sin asignar</span>
+                        <div class="inline-flex items-center gap-1.5 whitespace-nowrap">
+                            <span class="font-mono text-xs font-semibold">{{ row.weight_lb }} lbs</span>
+                            <span
+                                class="group relative inline-flex cursor-help items-center justify-center text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)] transition-colors"
+                                :title="`Conversión: ${formatWeightKg(row.weight_lb, row.weight_kg)}`"
+                            >
+                                <font-awesome-icon :icon="['fas', 'info-circle']" class="text-[11px]" />
+                                <!-- Tooltip visual flotante en hover -->
+                                <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-30">
+                                    <span class="rounded-lg bg-slate-900 px-2.5 py-1 text-sm font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                        ≈ {{ formatWeightKg(row.weight_lb, row.weight_kg) }}
+                                    </span>
+                                    <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                </span>
+                            </span>
+                        </div>
                     </template>
 
                     <!-- Fecha de Creación -->
                     <template #cell-created_at="{ row }">
-                        <span class="text-xs text-[var(--maya-text-muted)]">
+                        <span class="text-xs text-[var(--maya-text-muted)] whitespace-nowrap">
                             {{ formatDate(row.created_at) }}
                         </span>
                     </template>
 
                     <!-- Acciones -->
                     <template #cell-actions="{ row }">
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             <button
                                 type="button"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
                                 title="Ver Detalle y Tracking"
                                 @click="openDetailModal(row)"
                             >
@@ -838,7 +884,7 @@ onMounted(async () => {
 
                             <button
                                 type="button"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
                                 title="Editar Paquete"
                                 @click="openEditForm(row)"
                             >
@@ -847,7 +893,7 @@ onMounted(async () => {
 
                             <button
                                 type="button"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-950/20"
+                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/30 dark:hover:bg-red-950/20 transition shadow-2xs"
                                 title="Eliminar Paquete"
                                 @click="deleteShipment(row)"
                             >
@@ -1480,7 +1526,7 @@ onMounted(async () => {
                             <span class="text-[var(--maya-text-muted)]">Destinatario:</span>
                             <p class="font-bold text-[var(--maya-text-main)]">{{ detailShipment.recipient_name || detailShipment.sender?.full_name || 'N/A' }}</p>
                             <p v-if="detailShipment.recipient_phone || detailShipment.sender?.phone" class="font-mono text-[11px] text-[var(--maya-text-muted)]">
-                                📞 {{ detailShipment.recipient_phone || detailShipment.sender?.phone }}
+                                {{ detailShipment.recipient_phone || detailShipment.sender?.phone }}
                             </p>
                         </div>
                         <div>
@@ -1502,7 +1548,7 @@ onMounted(async () => {
                         <div>
                             <span class="text-[var(--maya-text-muted)]">Bodega / Ruta:</span>
                             <p class="font-bold text-[var(--maya-text-main)]">{{ detailShipment.warehouse_name || detailShipment.warehouse?.name || 'N/A' }}</p>
-                            <p class="font-mono text-[11px] text-[var(--maya-primary)]">{{ detailShipment.task_title || detailShipment.assigned_task?.title || 'Sin ruta' }}</p>
+                            <p class="font-mono text-[11px] font-bold text-black dark:text-white">{{ detailShipment.task_title || detailShipment.assigned_task?.title || 'Sin ruta' }}</p>
                         </div>
                     </div>
 

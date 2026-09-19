@@ -886,8 +886,8 @@ onUnmounted(() => {
                     @change-page="fetchTasks"
                 >
                     <template #cell-title="{ row }">
-                        <span class="inline-flex items-center gap-1.5 rounded-md bg-[var(--maya-hover-surface)] px-2.5 py-1 font-mono text-xs font-bold text-[var(--maya-primary)]">
-                            <font-awesome-icon :icon="['fas', 'route']" class="text-[10px]" />
+                        <span class="inline-flex items-center gap-1.5 rounded-md bg-[var(--maya-hover-surface)] px-2.5 py-1 font-mono text-xs font-bold text-black dark:text-white">
+                            <font-awesome-icon :icon="['fas', 'route']" class="text-[10px] text-[var(--maya-text-muted)]" />
                             {{ row.title }}
                         </span>
                     </template>
@@ -1043,7 +1043,7 @@ onUnmounted(() => {
                             Planificador de Rutas
                         </span>
                         <h2 class="text-lg font-bold text-[var(--maya-text-main)]">
-                            Nuevo Plan de Entrega: <span class="font-mono text-[var(--maya-primary)]">{{ wizardForm.title }}</span>
+                            Nuevo Plan de Entrega: <span class="font-mono font-bold text-black dark:text-white">{{ wizardForm.title }}</span>
                         </h2>
                     </div>
 
@@ -1119,7 +1119,7 @@ onUnmounted(() => {
                                 <input
                                     v-model="wizardForm.title"
                                     type="text"
-                                    class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] px-3 py-2 font-mono text-sm font-bold text-[var(--maya-primary)] focus:outline-none"
+                                    class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] px-3 py-2 font-mono text-sm font-bold text-black dark:text-white focus:outline-none"
                                     readonly
                                 />
                                 <button
@@ -1571,7 +1571,7 @@ onUnmounted(() => {
                         <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <div>
                                 <span class="text-[var(--maya-text-muted)]">Código:</span>
-                                <p class="font-mono font-bold text-[var(--maya-primary)]">{{ wizardForm.title }}</p>
+                                <p class="font-mono font-bold text-black dark:text-white">{{ wizardForm.title }}</p>
                             </div>
                             <div>
                                 <span class="text-[var(--maya-text-muted)]">Conductor:</span>
@@ -1660,7 +1660,7 @@ onUnmounted(() => {
                 <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-3">
                     <div v-if="detailTask">
                         <div class="flex items-center gap-2">
-                            <span class="font-mono text-xs font-bold text-[var(--maya-primary)]">{{ detailTask.title }}</span>
+                            <span class="font-mono text-xs font-bold text-black dark:text-white">{{ detailTask.title }}</span>
                             <span
                                 v-if="detailTask.status === 'in_progress'"
                                 class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"

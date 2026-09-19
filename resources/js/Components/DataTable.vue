@@ -38,6 +38,10 @@ const props = defineProps({
         type: Number,
         default: 200,
     },
+    tableClass: {
+        type: [String, Array, Object],
+        default: '',
+    },
 });
 
 const emit = defineEmits(['update:perPage', 'changePage']);
@@ -102,14 +106,15 @@ const goToNextPage = () => {
             Cargando datos...
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-[var(--maya-border)]">
+        <div class="overflow-x-auto table-scrollbar">
+            <table :class="['min-w-full divide-y divide-[var(--maya-border)]', tableClass]">
                 <thead class="bg-[var(--maya-hover-surface)]">
                     <tr>
                         <th
                             v-for="column in activeColumns"
                             :key="column.key"
-                            class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--maya-text-muted)]"
+                            class="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-[var(--maya-text-muted)]"
+                            :class="[column.headerClass, column.class]"
                         >
                             {{ column.label }}
                         </th>
@@ -128,12 +133,13 @@ const goToNextPage = () => {
                     <tr
                         v-for="row in rows"
                         :key="row.id"
-                        class="hover:bg-[var(--maya-hover-surface)]"
+                        class="hover:bg-[var(--maya-hover-surface)] transition-colors"
                     >
                         <td
                             v-for="column in activeColumns"
                             :key="`${row.id}-${column.key}`"
                             class="px-4 py-3 text-sm text-[var(--maya-text-main)]"
+                            :class="[column.cellClass, column.class]"
                         >
                             <slot :name="`cell-${column.key}`" :row="row">
                                 {{ row[column.key] ?? '-' }}
