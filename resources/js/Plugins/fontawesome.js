@@ -106,6 +106,8 @@ import {
     faAddressBook,
     faBuilding,
     faMapPin,
+    faPallet,
+    faBolt,
 } from '@fortawesome/free-solid-svg-icons';
 
 // Importar iconos regulares (Regular)
@@ -234,6 +236,8 @@ library.add(
     faAddressBook,
     faBuilding,
     faMapPin,
+    faPallet,
+    faBolt,
     // Regular
     faCircleRegular,
     faCalendarRegular,

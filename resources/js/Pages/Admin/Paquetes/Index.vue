@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DataTable from '@/Components/DataTable.vue';
@@ -24,8 +24,10 @@ const warehousesList = ref([]);
 const columns = [
     { key: 'tracking_number', label: 'Tracking' },
     { key: 'status', label: 'Estado' },
-    { key: 'recipient_name', label: 'Cliente' },
+    { key: 'reference_info', label: 'Doc / LPN WMS' },
+    { key: 'recipient_name', label: 'Destinatario' },
     { key: 'destination_address', label: 'Destino' },
+    { key: 'pieces_count', label: 'Bultos' },
     { key: 'warehouse_name', label: 'Bodega' },
     { key: 'package_type', label: 'Tipo' },
     { key: 'weight_lb', label: 'Peso (lbs)' },
@@ -43,20 +45,51 @@ const showFilters = ref(false);
 const filters = reactive({
     search: '',
     status: '',
+    reference_type: '',
     warehouse_id: '',
     package_type: '',
     date_from: '',
     date_to: '',
 });
 
-// --- Modal de Crear / Editar ---
-const modalOpen = ref(false);
+// --- Opciones de Catálogo ---
+const referenceTypes = [
+    { value: 'pedido', label: 'Pedido / Orden', icon: 'file-invoice' },
+    { value: 'factura', label: 'Factura', icon: 'file-lines' },
+    { value: 'transferencia', label: 'Transferencia', icon: 'arrow-right-arrow-left' },
+    { value: 'recibo', label: 'Recibo', icon: 'receipt' },
+    { value: 'guia', label: 'Guía Remisión', icon: 'truck-ramp-box' },
+    { value: 'lpn', label: 'LPN / Pallet directo', icon: 'pallet' },
+    { value: 'otro', label: 'Otro', icon: 'asterisk' },
+];
+
+const packageTypes = [
+    { value: 'caja', label: 'Caja', icon: 'box' },
+    { value: 'palet', label: 'Palet / Tarima', icon: 'pallet' },
+    { value: 'sobre', label: 'Sobre', icon: 'envelope' },
+    { value: 'paquete', label: 'Paquete / Bulto', icon: 'boxes-stacked' },
+];
+
+// --- Vista actual y Formulario (Recepción Guiada WMS) ---
+const currentView = ref('list'); // 'list' | 'form'
 const editingId = ref(null);
+const editingTrackingNumber = ref('');
 const saving = ref(false);
 const formErrors = ref({});
+const lpnInputRef = ref(null);
+
+// Modo destinatario: 'directory' (cliente del catálogo) o 'direct' (destinatario rápido/spot)
+const recipientMode = ref('directory');
+const saveToClientsDirectory = ref(false);
 
 const form = reactive({
+    reference_type: 'pedido',
+    reference_number: '',
+    lpn_code: '',
+    pieces_count: 1,
     sender_id: '',
+    recipient_name: '',
+    recipient_phone: '',
     warehouse_id: '',
     destination_address: '',
     destination_coords: '',
@@ -68,6 +101,37 @@ const form = reactive({
     dimensions: '',
     status: 'pending',
 });
+
+// --- Texto completo del documento WMS para verificación ---
+const documentFullText = computed(() => {
+    if (!form.reference_number) return '';
+    return `${(form.reference_type || 'Doc').toUpperCase()}: ${form.reference_number}`;
+});
+
+// --- Modal de visualización rápida para datos largos en verificación (>= 21 caracteres) ---
+const quickViewModalOpen = ref(false);
+const quickViewTitle = ref('');
+const quickViewValue = ref('');
+const copiedQuickView = ref(false);
+
+const openQuickViewModal = (title, value) => {
+    quickViewTitle.value = title;
+    quickViewValue.value = value;
+    copiedQuickView.value = false;
+    quickViewModalOpen.value = true;
+};
+
+const copyQuickViewValue = async () => {
+    try {
+        await navigator.clipboard.writeText(quickViewValue.value);
+        copiedQuickView.value = true;
+        setTimeout(() => {
+            copiedQuickView.value = false;
+        }, 2000);
+    } catch {
+        // Fallback
+    }
+};
 
 // --- Búsqueda predictiva de Clientes / Directorio ---
 const clientSearchQuery = ref('');
@@ -101,6 +165,9 @@ const searchClients = async () => {
 const selectClient = (client) => {
     selectedClient.value = client;
     form.sender_id = client.id;
+    form.recipient_name = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim();
+    form.recipient_phone = client.phone || '';
+
     const addr = client.direccion || [client.calle, client.street_name, client.street_number].filter(Boolean).join(' ');
     const refPoint = client.reference_point ? ` (Ref: ${client.reference_point})` : '';
     if (addr) {
@@ -110,7 +177,7 @@ const selectClient = (client) => {
         form.destination_coords = typeof client.destination_coords === 'object' ? JSON.stringify(client.destination_coords) : client.destination_coords;
     }
     showClientDropdown.value = false;
-    clientSearchQuery.value = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.email || '';
+    clientSearchQuery.value = form.recipient_name || client.email || '';
 };
 
 const clearClient = () => {
@@ -173,7 +240,6 @@ const fetchColumnPreferences = async () => {
             visibleColumns.value = res.data.data;
         }
     } catch {
-        // Fallback a columnas por defecto
         visibleColumns.value = [...defaultVisibleColumns];
     }
 };
@@ -203,10 +269,19 @@ const fetchAllShipmentsForExport = async () => {
 };
 
 // --- Manejo del Formulario (Crear / Editar) ---
-const resetForm = () => {
+const resetForm = (preserveContext = false) => {
+    const defaultWarehouse = form.warehouse_id || localStorage.getItem('maya_last_warehouse_id') || warehousesList.value[0]?.id || '';
+    const defaultRefType = preserveContext ? form.reference_type : 'pedido';
+
     Object.assign(form, {
+        reference_type: defaultRefType,
+        reference_number: '',
+        lpn_code: '',
+        pieces_count: 1,
         sender_id: '',
-        warehouse_id: warehousesList.value[0]?.id || '',
+        recipient_name: '',
+        recipient_phone: '',
+        warehouse_id: defaultWarehouse,
         destination_address: '',
         destination_coords: '',
         package_type: 'caja',
@@ -217,26 +292,42 @@ const resetForm = () => {
         dimensions: '',
         status: 'pending',
     });
-    editingId.value = null;
+
+    if (!preserveContext) {
+        editingId.value = null;
+        recipientMode.value = 'directory';
+        saveToClientsDirectory.value = false;
+    }
     formErrors.value = {};
     clearClient();
 };
 
-const openCreateModal = () => {
+const openCreateForm = () => {
     successMessage.value = '';
     errorMessage.value = '';
-    resetForm();
-    modalOpen.value = true;
+    resetForm(false);
+    editingTrackingNumber.value = '';
+    currentView.value = 'form';
+    nextTick(() => {
+        lpnInputRef.value?.focus();
+    });
 };
 
-const openEditModal = (shipment) => {
+const openEditForm = (shipment) => {
     successMessage.value = '';
     errorMessage.value = '';
     editingId.value = shipment.id;
+    editingTrackingNumber.value = shipment.tracking_number || '';
     formErrors.value = {};
 
     Object.assign(form, {
+        reference_type: shipment.reference_type || 'pedido',
+        reference_number: shipment.reference_number || '',
+        lpn_code: shipment.lpn_code || '',
+        pieces_count: shipment.pieces_count || 1,
         sender_id: shipment.sender_id || shipment.sender?.id || '',
+        recipient_name: shipment.recipient_name || shipment.sender?.full_name || '',
+        recipient_phone: shipment.recipient_phone || shipment.sender?.phone || '',
         warehouse_id: shipment.warehouse_id || shipment.warehouse?.id || '',
         destination_address: shipment.destination_address || '',
         destination_coords: shipment.destination_coords ? (typeof shipment.destination_coords === 'object' ? JSON.stringify(shipment.destination_coords) : shipment.destination_coords) : '',
@@ -249,12 +340,9 @@ const openEditModal = (shipment) => {
         status: shipment.status || 'pending',
     });
 
-    if (shipment.sender || shipment.client) {
-        const c = shipment.sender || shipment.client;
-        selectedClient.value = c;
-        clientSearchQuery.value = c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || '';
-    } else if (shipment.sender_id) {
-        const found = clientsList.value.find(c => c.id === shipment.sender_id);
+    if (shipment.sender_id) {
+        recipientMode.value = 'directory';
+        const found = clientsList.value.find(c => c.id === shipment.sender_id) || shipment.sender || shipment.client;
         if (found) {
             selectedClient.value = found;
             clientSearchQuery.value = found.full_name || `${found.first_name || ''} ${found.last_name || ''}`.trim() || found.email || '';
@@ -262,33 +350,78 @@ const openEditModal = (shipment) => {
             clearClient();
         }
     } else {
+        recipientMode.value = 'direct';
         clearClient();
     }
 
-    modalOpen.value = true;
+    currentView.value = 'form';
 };
 
-const closeModal = () => {
-    modalOpen.value = false;
-    resetForm();
+const closeForm = () => {
+    currentView.value = 'list';
+    resetForm(false);
+    fetchShipments(pagination.value?.current_page || 1);
+};
+
+const handlePerPageChange = (val) => {
+    perPage.value = val;
+    fetchShipments(1);
 };
 
 const onWeightLbChange = () => {
     const lb = parseFloat(form.weight_lb);
     if (!isNaN(lb) && lb > 0) {
         form.weight_kg = (lb / 2.20462).toFixed(2);
+    } else {
+        form.weight_kg = '';
     }
 };
 
-const saveShipment = async () => {
+const onWeightKgChange = () => {
+    const kg = parseFloat(form.weight_kg);
+    if (!isNaN(kg) && kg > 0) {
+        form.weight_lb = (kg * 2.20462).toFixed(2);
+    } else {
+        form.weight_lb = '';
+    }
+};
+
+const saveShipment = async (andCreateAnother = false) => {
     saving.value = true;
     formErrors.value = {};
     errorMessage.value = '';
 
+    // Recordar última bodega seleccionada
+    if (form.warehouse_id) {
+        localStorage.setItem('maya_last_warehouse_id', form.warehouse_id);
+    }
+
+    // Si el usuario eligió modo directo y marcó "guardar en directorio", crear el cliente en background
+    if (!editingId.value && recipientMode.value === 'direct' && saveToClientsDirectory.value && form.recipient_name && !form.sender_id) {
+        try {
+            const clientRes = await window.axios.post(route('admin.clients.store'), {
+                full_name: form.recipient_name,
+                phone: form.recipient_phone || 'N/A',
+                direccion: form.destination_address,
+            });
+            if (clientRes.data?.data?.id) {
+                form.sender_id = clientRes.data.data.id;
+            }
+        } catch (e) {
+            console.warn('No se pudo pre-crear el cliente en directorio:', e);
+        }
+    }
+
     const payload = {
-        sender_id: form.sender_id,
+        reference_type: form.reference_type || null,
+        reference_number: form.reference_number ? form.reference_number.trim() : null,
+        lpn_code: form.lpn_code ? form.lpn_code.trim() : null,
+        pieces_count: parseInt(form.pieces_count) || 1,
+        sender_id: recipientMode.value === 'directory' ? (form.sender_id || null) : (form.sender_id || null),
+        recipient_name: form.recipient_name ? form.recipient_name.trim() : null,
+        recipient_phone: form.recipient_phone ? form.recipient_phone.trim() : null,
         warehouse_id: form.warehouse_id,
-        destination_address: form.destination_address,
+        destination_address: form.destination_address ? form.destination_address.trim() : '',
         destination_coords: form.destination_coords || null,
         package_type: form.package_type,
         weight_lb: parseFloat(form.weight_lb) || 0,
@@ -300,15 +433,29 @@ const saveShipment = async () => {
     };
 
     try {
+        let res;
         if (editingId.value) {
-            await window.axios.patch(route('admin.shipments.update', { id: editingId.value }), payload);
+            res = await window.axios.patch(route('admin.shipments.update', { id: editingId.value }), payload);
             successMessage.value = 'Paquete actualizado exitosamente.';
+            closeForm();
+            await fetchShipments(pagination.value?.current_page || 1);
         } else {
-            await window.axios.post(route('admin.shipments.store'), payload);
-            successMessage.value = 'Paquete creado exitosamente.';
+            res = await window.axios.post(route('admin.shipments.store'), payload);
+            const createdTracking = res.data?.data?.tracking_number || '';
+            const createdLpn = res.data?.data?.lpn_code ? ` [LPN: ${res.data.data.lpn_code}]` : '';
+
+            if (andCreateAnother) {
+                successMessage.value = `¡Paquete ${createdTracking}${createdLpn} registrado! Listo para escanear el siguiente.`;
+                resetForm(true);
+                fetchShipments(1);
+                nextTick(() => {
+                    lpnInputRef.value?.focus();
+                });
+            } else {
+                successMessage.value = `Paquete ${createdTracking} creado exitosamente.`;
+                closeForm();
+            }
         }
-        closeModal();
-        await fetchShipments(pagination.value?.current_page || 1);
     } catch (err) {
         if (err?.response?.status === 422) {
             formErrors.value = err.response.data.errors || {};
@@ -317,6 +464,17 @@ const saveShipment = async () => {
         }
     } finally {
         saving.value = false;
+    }
+};
+
+const handleFormKeydown = (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        if (!editingId.value) {
+            saveShipment(true);
+        } else {
+            saveShipment(false);
+        }
     }
 };
 
@@ -383,22 +541,25 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head title="Gestión de Envíos" />
+    <Head :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción de Envíos') : 'Gestión de Envíos'" />
 
-    <AdminLayout title="Envíos">
-        <div class="space-y-6">
+    <AdminLayout :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción WMS') : 'Envíos'">
+        <!-- ==================================================================== -->
+        <!-- VISTA 1: LISTADO Y TABLA DE ENVÍOS                                   -->
+        <!-- ==================================================================== -->
+        <div v-if="currentView === 'list'" class="space-y-6">
             <!-- Header y Acciones principales -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <div class="flex items-center gap-2">
                             <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)]">
-                                <font-awesome-icon :icon="['fas', 'box']" class="text-lg" />
+                                <font-awesome-icon :icon="['fas', 'boxes-stacked']" class="text-lg" />
                             </span>
                             <h1 class="text-xl font-bold text-[var(--maya-text-main)]">Gestión de Envíos y Paquetes</h1>
                         </div>
                         <p class="mt-1 text-sm text-[var(--maya-text-muted)]">
-                            Inventario maestro de paquetes, historial de tracking y trazabilidad de entregas.
+                            Recepción ágil de WMS, trazabilidad de bultos/LPNs y seguimiento de entregas.
                         </p>
                     </div>
 
@@ -414,7 +575,7 @@ onMounted(async () => {
 
                         <button
                             type="button"
-                            class="inline-flex items-center gap-2 rounded-md border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
+                            class="inline-flex items-center gap-2 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
                             @click="showFilters = !showFilters"
                         >
                             <font-awesome-icon :icon="['fas', 'filter']" />
@@ -433,20 +594,22 @@ onMounted(async () => {
                         <button
                             type="button"
                             class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--maya-primary-dark)]"
-                            @click="openCreateModal"
+                            @click="openCreateForm"
                         >
                             <font-awesome-icon :icon="['fas', 'plus']" />
-                            Nuevo Envío
+                            Recepción Rápida / Nuevo
                         </button>
                     </div>
                 </div>
 
                 <!-- Mensajes -->
-                <div v-if="successMessage" class="mt-4 rounded-xl border border-[var(--maya-success)] bg-[var(--maya-success-alpha)] p-3 text-sm text-[var(--maya-success-dark)]">
-                    {{ successMessage }}
+                <div v-if="successMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-success)] bg-[var(--maya-success-alpha)] p-3 text-sm text-[var(--maya-success-dark)]">
+                    <span>{{ successMessage }}</span>
+                    <button type="button" class="text-xs font-bold underline" @click="successMessage = ''">✕</button>
                 </div>
-                <div v-if="errorMessage" class="mt-4 rounded-xl border border-[var(--maya-danger)] bg-[var(--maya-danger-alpha)] p-3 text-sm text-[var(--maya-danger)]">
-                    {{ errorMessage }}
+                <div v-if="errorMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-danger)] bg-[var(--maya-danger-alpha)] p-3 text-sm text-[var(--maya-danger)]">
+                    <span>{{ errorMessage }}</span>
+                    <button type="button" class="text-xs font-bold underline" @click="errorMessage = ''">✕</button>
                 </div>
 
                 <!-- Panel desplegable de Filtros -->
@@ -456,7 +619,7 @@ onMounted(async () => {
                         <input
                             v-model="filters.search"
                             type="text"
-                            placeholder="Tracking o remitente..."
+                            placeholder="Tracking, LPN, Pedido, Cliente..."
                             class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-3 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
                             @keyup.enter="fetchShipments(1)"
                         />
@@ -481,6 +644,20 @@ onMounted(async () => {
                     </div>
 
                     <div>
+                        <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Tipo Documento WMS</label>
+                        <select
+                            v-model="filters.reference_type"
+                            class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-3 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                            @change="fetchShipments(1)"
+                        >
+                            <option value="">Todos los documentos</option>
+                            <option v-for="rt in referenceTypes" :key="rt.value" :value="rt.value">
+                                {{ rt.label }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
                         <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Bodega</label>
                         <select
                             v-model="filters.warehouse_id"
@@ -494,114 +671,107 @@ onMounted(async () => {
                         </select>
                     </div>
 
-                    <div class="flex items-end gap-2">
+                    <div class="flex items-end gap-2 lg:col-span-2">
                         <div class="flex-1">
-                            <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Tipo</label>
+                            <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Tipo Empaque</label>
                             <select
                                 v-model="filters.package_type"
                                 class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-3 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
                                 @change="fetchShipments(1)"
                             >
-                                <option value="">Todos</option>
+                                <option value="">Todos los empaques</option>
                                 <option value="caja">Caja</option>
+                                <option value="palet">Palet / Tarima</option>
                                 <option value="sobre">Sobre</option>
                                 <option value="paquete">Paquete</option>
-                                <option value="palet">Palet</option>
                             </select>
                         </div>
-
                         <button
                             type="button"
-                            class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] px-3 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:opacity-80"
-                            @click="() => { Object.keys(filters).forEach(k => filters[k] = ''); fetchShipments(1); }"
+                            class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-1.5 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
+                            @click="Object.assign(filters, { search: '', status: '', reference_type: '', warehouse_id: '', package_type: '', date_from: '', date_to: '' }); fetchShipments(1);"
                         >
                             Limpiar
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded-xl bg-[var(--maya-primary)] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[var(--maya-primary-dark)]"
+                            @click="fetchShipments(1)"
+                        >
+                            Aplicar
                         </button>
                     </div>
                 </div>
             </section>
 
-            <!-- Tabla Principal de Paquetes -->
-            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm">
+            <!-- Tabla de Envíos -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
                 <DataTable
                     :columns="columns"
                     :rows="shipments"
-                    :visible-columns="visibleColumns"
                     :loading="loading"
                     :pagination="pagination"
                     :per-page="perPage"
-                    empty-text="No se encontraron paquetes registrados."
+                    :visible-columns="visibleColumns"
+                    empty-text="No hay envíos registrados todavía."
+                    @update:per-page="handlePerPageChange"
                     @change-page="fetchShipments"
                 >
-                    <!-- Tracking Number -->
+                    <!-- Tracking Number y LPN -->
                     <template #cell-tracking_number="{ row }">
-                        <button
-                            type="button"
-                            class="font-mono text-xs font-bold text-[var(--maya-primary)] hover:underline"
-                            title="Ver detalles"
-                            @click="openDetailModal(row)"
-                        >
-                            {{ row.tracking_number }}
-                        </button>
+                        <div class="flex flex-col">
+                            <span class="font-mono text-xs font-bold text-[var(--maya-primary)]">
+                                {{ row.tracking_number }}
+                            </span>
+                            <span v-if="row.lpn_code" class="mt-0.5 inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                <font-awesome-icon :icon="['fas', 'barcode']" class="text-[9px]" />
+                                {{ row.lpn_code }}
+                            </span>
+                        </div>
                     </template>
 
-                    <!-- Estado con Badge -->
+                    <!-- Estado -->
                     <template #cell-status="{ row }">
                         <span
-                            v-if="row.status === 'delivered'"
-                            class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                            class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                            :class="{
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': row.status === 'pending',
+                                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': row.status === 'in_warehouse',
+                                'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300': row.status === 'assigned',
+                                'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300': row.status === 'in_transit',
+                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': row.status === 'delivered',
+                                'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300': row.status === 'returned',
+                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': row.status === 'failed',
+                            }"
                         >
-                            <font-awesome-icon :icon="['fas', 'check']" class="text-[10px]" />
-                            Entregado
-                        </span>
-                        <span
-                            v-else-if="row.status === 'in_transit'"
-                            class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                        >
-                            <font-awesome-icon :icon="['fas', 'truck']" class="text-[10px]" />
-                            En tránsito
-                        </span>
-                        <span
-                            v-else-if="row.status === 'assigned'"
-                            class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
-                        >
-                            <font-awesome-icon :icon="['fas', 'route']" class="text-[10px]" />
-                            Asignado
-                        </span>
-                        <span
-                            v-else-if="row.status === 'in_warehouse'"
-                            class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
-                        >
-                            <font-awesome-icon :icon="['fas', 'warehouse']" class="text-[10px]" />
-                            En bodega
-                        </span>
-                        <span
-                            v-else-if="row.status === 'returned'"
-                            class="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-semibold text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
-                        >
-                            <font-awesome-icon :icon="['fas', 'rotate-left']" class="text-[10px]" />
-                            Devuelto
-                        </span>
-                        <span
-                            v-else-if="row.status === 'failed'"
-                            class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                        >
-                            <font-awesome-icon :icon="['fas', 'xmark']" class="text-[10px]" />
-                            Fallido
-                        </span>
-                        <span
-                            v-else
-                            class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                        >
-                            Pendiente
+                            {{ row.status_label || row.status }}
                         </span>
                     </template>
 
-                    <!-- Remitente / Cliente -->
+                    <!-- Doc / LPN WMS -->
+                    <template #cell-reference_info="{ row }">
+                        <div class="flex flex-col text-xs">
+                            <span v-if="row.reference_number" class="font-medium text-[var(--maya-text-main)]">
+                                <span class="text-[10px] uppercase text-[var(--maya-text-muted)]">{{ row.reference_type || 'DOC' }}:</span>
+                                <strong class="ml-1 font-mono">{{ row.reference_number }}</strong>
+                            </span>
+                            <span v-if="row.lpn_code" class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+                                LPN: {{ row.lpn_code }}
+                            </span>
+                            <span v-if="!row.reference_number && !row.lpn_code" class="text-[var(--maya-text-muted)]">-</span>
+                        </div>
+                    </template>
+
+                    <!-- Destinatario -->
                     <template #cell-recipient_name="{ row }">
-                        <span class="font-medium text-[var(--maya-text-main)]">
-                            {{ row.recipient_name || row.sender?.full_name || 'Sin cliente' }}
-                        </span>
+                        <div class="flex flex-col">
+                            <span class="font-medium text-[var(--maya-text-main)]">
+                                {{ row.recipient_name || row.sender?.full_name || 'Sin destinatario' }}
+                            </span>
+                            <span v-if="row.recipient_phone || row.sender?.phone" class="font-mono text-[11px] text-[var(--maya-text-muted)]">
+                                📞 {{ row.recipient_phone || row.sender?.phone }}
+                            </span>
+                        </div>
                     </template>
 
                     <!-- Destino -->
@@ -611,10 +781,25 @@ onMounted(async () => {
                         </span>
                     </template>
 
+                    <!-- Bultos -->
+                    <template #cell-pieces_count="{ row }">
+                        <span class="inline-flex items-center gap-1 rounded-md bg-[var(--maya-hover-surface)] px-2 py-0.5 font-mono text-xs font-semibold text-[var(--maya-text-main)]">
+                            <font-awesome-icon :icon="['fas', 'box']" class="text-[10px] text-[var(--maya-text-muted)]" />
+                            {{ row.pieces_count || 1 }}
+                        </span>
+                    </template>
+
                     <!-- Bodega -->
                     <template #cell-warehouse_name="{ row }">
                         <span class="text-xs text-[var(--maya-text-main)]">
                             {{ row.warehouse_name || row.warehouse?.name || '-' }}
+                        </span>
+                    </template>
+
+                    <!-- Tipo -->
+                    <template #cell-package_type="{ row }">
+                        <span class="capitalize text-xs text-[var(--maya-text-muted)]">
+                            {{ row.package_type || '-' }}
                         </span>
                     </template>
 
@@ -655,7 +840,7 @@ onMounted(async () => {
                                 type="button"
                                 class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
                                 title="Editar Paquete"
-                                @click="openEditModal(row)"
+                                @click="openEditForm(row)"
                             >
                                 <font-awesome-icon :icon="['fas', 'pencil']" />
                             </button>
@@ -675,215 +860,451 @@ onMounted(async () => {
         </div>
 
         <!-- ==================================================================== -->
-        <!-- MODAL: CREAR / EDITAR ENVÍO                                          -->
+        <!-- VISTA 2: FORMULARIO DE RECEPCIÓN / EDICIÓN WMS A ÚLTIMA MILLA         -->
         <!-- ==================================================================== -->
-        <Modal :show="modalOpen" max-width="2xl" @close="closeModal">
-            <div class="p-6">
-                <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-4">
-                    <div>
-                        <h2 class="text-lg font-bold text-[var(--maya-text-main)]">
-                            {{ editingId ? 'Editar Paquete' : 'Registrar Nuevo Envío' }}
-                        </h2>
-                        <p class="text-xs text-[var(--maya-text-muted)]">
-                            Ingresa los datos del paquete para su almacenaje y despacho.
-                        </p>
+        <div v-else-if="currentView === 'form'" class="space-y-6" @keydown="handleFormKeydown">
+            <!-- Header de Navegación y Acciones -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-xs"
+                            title="Volver al listado de envíos"
+                            @click="closeForm"
+                        >
+                            <font-awesome-icon :icon="['fas', 'arrow-left']" />
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-lg font-bold text-[var(--maya-text-main)]">
+                                    {{ editingId ? 'Editar Paquete / Envío' : 'Registro de Paquetes' }}
+                                </h1>
+                                <span v-if="editingId && editingTrackingNumber" class="rounded-lg bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
+                                    #{{ editingTrackingNumber }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-[var(--maya-text-muted)]">
+                                {{ editingId ? 'Modifica los datos del paquete registrado en el sistema.' : 'Optimizado para escaneo continuo y despacho.' }}
+                            </p>
+                        </div>
                     </div>
-                    <button type="button" class="text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]" @click="closeModal">
-                        <font-awesome-icon :icon="['fas', 'xmark']" class="text-lg" />
-                    </button>
                 </div>
 
-                <div class="mt-4 space-y-4">
-                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <!-- Notificaciones en el formulario -->
+                <div v-if="successMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-success)] bg-[var(--maya-success-alpha)] p-3 text-sm text-[var(--maya-success-dark)]">
+                    <div class="flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'circle-check']" />
+                        <span>{{ successMessage }}</span>
+                    </div>
+                    <button type="button" class="text-xs font-bold underline" @click="successMessage = ''">✕</button>
+                </div>
+
+                <div v-if="errorMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-danger)] bg-[var(--maya-danger-alpha)] p-3 text-sm text-[var(--maya-danger)]">
+                    <div class="flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'circle-exclamation']" />
+                        <span>{{ errorMessage }}</span>
+                    </div>
+                    <button type="button" class="text-xs font-bold underline" @click="errorMessage = ''">✕</button>
+                </div>
+            </section>
+
+            <!-- Contenedor Principal del Formulario en 2 Columnas -->
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+                <!-- Columna Izquierda: Documento WMS & Destinatario (7 cols) -->
+                <div class="space-y-6 lg:col-span-7">
+                    <!-- ================================================================ -->
+                    <!-- BLOQUE 1: DOCUMENTO DE ORIGEN & LPN (VÍNCULO WMS)                -->
+                    <!-- ================================================================ -->
+                    <div class="rounded-2xl border border-sky-200/80 bg-sky-50/40 p-5 shadow-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                        <div class="mb-4 flex items-center justify-between border-b border-sky-200/60 pb-3 dark:border-sky-900/30">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-sky-600 text-white shadow-xs">
+                                    <font-awesome-icon :icon="['fas', 'file-invoice']" class="text-xs" />
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-sky-900 dark:text-sky-200">
+                                        1. Documento de Origen & LPN WMS
+                                    </h3>
+                                    <p class="text-[11px] text-sky-700/80 dark:text-sky-400">
+                                        Vinculación con el sistema de bodega (LPN, Pallet, Pedido o Factura)
+                                    </p>
+                                </div>
+                            </div>
+                            <span class="rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/50 dark:text-sky-300">
+                                Despacho Muelle
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                            <!-- Código LPN / Pallet (Pistola de código de barras) -->
+                            <div class="sm:col-span-1">
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Código LPN / Pallet
+                                </label>
+                                <div class="relative mt-1">
+                                    <input
+                                        ref="lpnInputRef"
+                                        v-model="form.lpn_code"
+                                        type="text"
+                                        placeholder="Escanear LPN..."
+                                        class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] pl-8 pr-3 py-2.5 font-mono text-xs font-bold text-[var(--maya-text-main)] focus:border-[var(--maya-primary)] focus:outline-none"
+                                    />
+                                    <font-awesome-icon :icon="['fas', 'barcode']" class="absolute left-2.5 top-3 text-xs text-[var(--maya-text-muted)]" />
+                                </div>
+                                <p v-if="formErrors.lpn_code" class="mt-1 text-[11px] text-red-500">{{ formErrors.lpn_code[0] }}</p>
+                            </div>
+
+                            <!-- Tipo de Documento -->
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Tipo de Documento
+                                </label>
+                                <select
+                                    v-model="form.reference_type"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                >
+                                    <option v-for="rt in referenceTypes" :key="rt.value" :value="rt.value">
+                                        {{ rt.label }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <!-- Número de Documento / Referencia -->
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    N° Documento / Pedido
+                                </label>
+                                <input
+                                    v-model="form.reference_number"
+                                    type="text"
+                                    placeholder="Ej: PED-10842 o FAC-902"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                />
+                                <p v-if="formErrors.reference_number" class="mt-1 text-[11px] text-red-500">{{ formErrors.reference_number[0] }}</p>
+                            </div>
+                        </div>
+
                         <!-- Bodega de Origen -->
-                        <div class="sm:col-span-2">
+                        <div class="mt-4">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Bodega de Origen *
+                                Bodega de Salida / Despacho *
                             </label>
                             <select
                                 v-model="form.warehouse_id"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 text-xs font-medium text-[var(--maya-text-main)] focus:outline-none"
                             >
-                                <option value="">Selecciona la bodega</option>
+                                <option value="">Seleccionar bodega de salida...</option>
                                 <option v-for="wh in warehousesList" :key="wh.id" :value="wh.id">
-                                    {{ wh.name }} ({{ wh.code }})
+                                    {{ wh.name }} ({{ wh.code || 'BOD' }})
                                 </option>
                             </select>
-                            <p v-if="formErrors.warehouse_id" class="mt-1 text-xs text-red-500">{{ formErrors.warehouse_id[0] || formErrors.warehouse_id }}</p>
+                            <p v-if="formErrors.warehouse_id" class="mt-1 text-[11px] text-red-500">{{ formErrors.warehouse_id[0] }}</p>
                         </div>
+                    </div>
 
-                        <!-- Cliente / Destinatario (Directorio Unificado) -->
-                        <div class="sm:col-span-2">
-                            <div class="flex items-center justify-between">
-                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                    Cliente / Destinatario *
-                                </label>
-                                <span class="text-[11px] text-[var(--maya-text-muted)]">Busca en el directorio para autocompletar</span>
+                    <!-- ================================================================ -->
+                    <!-- BLOQUE 2: DESTINATARIO & DESTINO (SIN BLOQUEOS)                  -->
+                    <!-- ================================================================ -->
+                    <div class="rounded-2xl border border-sky-200/80 bg-sky-50/40 p-5 shadow-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-sky-200/60 pb-3 dark:border-sky-900/30">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs">
+                                    <font-awesome-icon :icon="['fas', 'location-dot']" class="text-xs" />
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-sky-900 dark:text-sky-200">
+                                        2. Destinatario & Lugar de Entrega
+                                    </h3>
+                                    <p class="text-[11px] text-sky-700/80 dark:text-sky-400">
+                                        Selecciona un cliente frecuente o ingresa el destinatario del WMS
+                                    </p>
+                                </div>
                             </div>
 
-                            <div class="relative mt-1">
-                                <div class="flex items-center gap-2">
-                                    <div class="relative flex-1">
-                                        <input
-                                            v-model="clientSearchQuery"
-                                            type="text"
-                                            placeholder="Buscar cliente por nombre, teléfono, email..."
-                                            class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] pl-8 pr-8 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
-                                            @input="searchClients"
-                                            @focus="searchClients"
-                                        />
-                                        <font-awesome-icon :icon="['fas', 'user']" class="absolute left-2.5 top-2.5 text-xs text-[var(--maya-text-muted)]" />
-                                        <button
-                                            v-if="clientSearchQuery"
-                                            type="button"
-                                            class="absolute right-2.5 top-2 text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
-                                            @click="clearClient"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'xmark']" />
-                                        </button>
-                                    </div>
+                            <!-- Toggle Directorio vs Destinatario Directo -->
+                            <div class="inline-flex rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-1 text-xs">
+                                <button
+                                    type="button"
+                                    class="rounded-lg px-3 py-1.5 transition-all"
+                                    :class="recipientMode === 'directory' ? 'bg-[var(--maya-primary)] font-semibold text-white shadow-xs' : 'text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]'"
+                                    @click="recipientMode = 'directory'"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'address-book']" class="mr-1" />
+                                    Directorio
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded-lg px-3 py-1.5 transition-all"
+                                    :class="recipientMode === 'direct' ? 'bg-[var(--maya-primary)] font-semibold text-white shadow-xs' : 'text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]'"
+                                    @click="recipientMode = 'direct'; clearClient();"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'bolt']" class="mr-1" />
+                                    Destinatario Rápido
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Opción A: Directorio de Clientes con Autocompletado -->
+                        <div v-if="recipientMode === 'directory'" class="space-y-3">
+                            <div class="relative">
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)] mb-1">
+                                    Buscar Cliente Frecuente
+                                </label>
+                                <div class="relative">
+                                    <input
+                                        v-model="clientSearchQuery"
+                                        type="text"
+                                        placeholder="Buscar por nombre, teléfono o correo..."
+                                        class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] pl-8 pr-8 py-2.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                        @input="searchClients"
+                                        @focus="searchClients"
+                                    />
+                                    <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="absolute left-2.5 top-3 text-xs text-[var(--maya-text-muted)]" />
+                                    <button
+                                        v-if="clientSearchQuery"
+                                        type="button"
+                                        class="absolute right-2.5 top-2.5 text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
+                                        @click="clearClient"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'xmark']" />
+                                    </button>
                                 </div>
 
-                                <!-- Dropdown con resultados predictivos de clientes -->
+                                <!-- Dropdown con resultados predictivos -->
                                 <div
                                     v-if="showClientDropdown && clientSearchResults.length"
-                                    class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] shadow-lg"
+                                    class="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] shadow-xl"
                                 >
                                     <div
                                         v-for="c in clientSearchResults"
                                         :key="c.id"
-                                        class="cursor-pointer border-b border-[var(--maya-border)] p-2.5 text-xs hover:bg-[var(--maya-hover-surface)] transition-colors last:border-b-0"
+                                        class="cursor-pointer border-b border-[var(--maya-border)] p-3 text-xs hover:bg-[var(--maya-hover-surface)] transition-colors last:border-b-0"
                                         @click="selectClient(c)"
                                     >
                                         <div class="flex items-center justify-between font-semibold text-[var(--maya-text-main)]">
                                             <span>{{ c.full_name || `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email }}</span>
                                             <span class="font-mono text-[11px] text-[var(--maya-primary)]">{{ c.phone }}</span>
                                         </div>
-                                        <p v-if="c.direccion || c.street_name" class="text-[11px] text-[var(--maya-text-muted)] truncate mt-0.5">
+                                        <p v-if="c.direccion || c.street_name" class="text-[11px] text-[var(--maya-text-muted)] truncate mt-1">
                                             📍 {{ c.direccion || c.street_name }}
                                             <span v-if="c.reference_point"> (Ref: {{ c.reference_point }})</span>
                                         </p>
                                     </div>
                                 </div>
-
-                                <div
-                                    v-else-if="showClientDropdown && isSearchingClients"
-                                    class="absolute z-20 mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-3 text-center text-xs text-[var(--maya-text-muted)] shadow-lg"
-                                >
-                                    Buscando clientes...
-                                </div>
                             </div>
 
-                            <!-- Card resumen de cliente seleccionado -->
-                            <div v-if="selectedClient" class="mt-1.5 flex items-center justify-between rounded-lg bg-[var(--maya-primary-alpha)] border border-[var(--maya-primary)] px-2.5 py-1.5 text-xs text-[var(--maya-primary)]">
-                                <div class="flex items-center gap-2">
-                                    <font-awesome-icon :icon="['fas', 'check']" class="text-xs" />
-                                    <span>
-                                        Cliente: <strong>{{ selectedClient.full_name || `${selectedClient.first_name || ''} ${selectedClient.last_name || ''}`.trim() || selectedClient.email }}</strong>
-                                        <span v-if="selectedClient.phone" class="font-mono ml-1">({{ selectedClient.phone }})</span>
-                                    </span>
+                            <!-- Cliente seleccionado resumen -->
+                            <div v-if="selectedClient" class="flex items-center justify-between rounded-xl bg-[var(--maya-primary-alpha)] border border-[var(--maya-primary)] p-3 text-xs text-[var(--maya-primary)]">
+                                <div>
+                                    <span class="font-bold">Cliente Seleccionado:</span>
+                                    <span class="ml-1 font-semibold">{{ selectedClient.full_name || `${selectedClient.first_name || ''} ${selectedClient.last_name || ''}`.trim() }}</span>
+                                    <span v-if="selectedClient.phone" class="font-mono ml-2 text-[11px]">📞 {{ selectedClient.phone }}</span>
                                 </div>
-                                <button
-                                    type="button"
-                                    class="text-[11px] font-semibold underline hover:opacity-80"
-                                    @click="clearClient"
-                                >
+                                <button type="button" class="text-xs font-bold underline hover:opacity-80" @click="clearClient">
                                     Cambiar
                                 </button>
                             </div>
-                            <p v-if="formErrors.sender_id" class="mt-1 text-xs text-red-500">{{ formErrors.sender_id[0] || formErrors.sender_id }}</p>
                         </div>
 
-                        <div class="sm:col-span-2">
+                        <!-- Opción B: Destinatario Rápido (Spot / WMS) -->
+                        <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Nombre del Destinatario / Empresa *
+                                </label>
+                                <input
+                                    v-model="form.recipient_name"
+                                    type="text"
+                                    placeholder="Ej: Ferretería El Tornillo o Juan Pérez"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                />
+                                <p v-if="formErrors.recipient_name" class="mt-1 text-[11px] text-red-500">{{ formErrors.recipient_name[0] }}</p>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Teléfono de Contacto
+                                </label>
+                                <input
+                                    v-model="form.recipient_phone"
+                                    type="text"
+                                    placeholder="Ej: 6123-4567"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                />
+                            </div>
+
+                            <div class="sm:col-span-2">
+                                <label class="flex items-center gap-2 text-xs text-[var(--maya-text-muted)] cursor-pointer">
+                                    <input
+                                        v-model="saveToClientsDirectory"
+                                        type="checkbox"
+                                        class="rounded border-[var(--maya-border)] text-[var(--maya-primary)] focus:ring-0"
+                                    />
+                                    Guardar también en el directorio de clientes para futuros pedidos
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Dirección de Destino -->
+                        <div class="mt-4">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
                                 Dirección de Entrega (Destino) *
                             </label>
                             <input
                                 v-model="form.destination_address"
                                 type="text"
-                                placeholder="Calle, edificio, urbanización, corregimiento..."
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                placeholder="Calle, corregimiento, edificio, piso, local, punto de referencia..."
+                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
                             />
-                            <p v-if="formErrors.destination_address" class="mt-1 text-xs text-red-500">{{ formErrors.destination_address[0] || formErrors.destination_address }}</p>
+                            <p v-if="formErrors.destination_address" class="mt-1 text-[11px] text-red-500">{{ formErrors.destination_address[0] }}</p>
                         </div>
+                    </div>
+                </div>
 
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Tipo de Paquete *
-                            </label>
-                            <select
-                                v-model="form.package_type"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
-                            >
-                                <option value="caja">Caja</option>
-                                <option value="sobre">Sobre</option>
-                                <option value="paquete">Paquete</option>
-                                <option value="palet">Palet</option>
-                            </select>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-2">
-                            <div>
-                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                    Peso (lbs) *
-                                </label>
-                                <input
-                                    v-model="form.weight_lb"
-                                    type="number"
-                                    step="0.1"
-                                    placeholder="Libras"
-                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
-                                    @input="onWeightLbChange"
-                                />
-                                <p v-if="formErrors.weight_lb" class="mt-1 text-xs text-red-500">{{ formErrors.weight_lb[0] || formErrors.weight_lb }}</p>
+                <!-- Columna Derecha: Carga Física, Opciones y Resumen (5 cols) -->
+                <div class="lg:col-span-5 flex flex-col h-full">
+                    <!-- ================================================================ -->
+                    <!-- BLOQUE 3: CARGA FÍSICA & TRANSPORTE                              -->
+                    <!-- ================================================================ -->
+                    <div class="flex-1 flex flex-col rounded-2xl border border-sky-200/80 bg-sky-50/40 p-5 shadow-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                        <div class="mb-4 flex items-center justify-between border-b border-sky-200/60 pb-3 dark:border-sky-900/30 shrink-0">
+                            <div class="flex items-center gap-2">
+                                <span class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-600 text-white shadow-xs">
+                                    <font-awesome-icon :icon="['fas', 'box']" class="text-xs" />
+                                </span>
+                                <div>
+                                    <h3 class="text-sm font-bold text-sky-900 dark:text-sky-200">
+                                        3. Carga Física & Transporte
+                                    </h3>
+                                    <p class="text-[11px] text-sky-700/80 dark:text-sky-400">
+                                        Parámetros de embalaje, peso y cubicaje
+                                    </p>
+                                </div>
                             </div>
+                        </div>
+
+                        <!-- Tipo de Empaque (Tarjetas interactivas) -->
+                        <div class="shrink-0">
+                            <label class="block text-xs font-semibold text-[var(--maya-text-main)] mb-1.5">
+                                Tipo de Empaque *
+                            </label>
+                            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
+                                <button
+                                    v-for="pt in packageTypes"
+                                    :key="pt.value"
+                                    type="button"
+                                    class="flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-medium transition-all"
+                                    :class="form.package_type === pt.value
+                                        ? 'border-[var(--maya-primary)] bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)] font-bold shadow-xs ring-1 ring-[var(--maya-primary)]'
+                                        : 'border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-text-muted)] hover:bg-[var(--maya-hover-surface)]'"
+                                    @click="form.package_type = pt.value"
+                                >
+                                    <font-awesome-icon :icon="['fas', pt.icon]" />
+                                    {{ pt.label }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Bultos y Peso -->
+                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 shrink-0">
+                            <!-- Cantidad de Bultos / Piezas -->
                             <div>
                                 <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                    Equivalente kg
+                                    Cantidad de Bultos *
+                                </label>
+                                <div class="mt-1 flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-xs font-bold hover:bg-[var(--maya-hover-surface)]"
+                                        @click="form.pieces_count = Math.max(1, (parseInt(form.pieces_count) || 1) - 1)"
+                                    >
+                                        -
+                                    </button>
+                                    <input
+                                        v-model="form.pieces_count"
+                                        type="number"
+                                        min="1"
+                                        class="h-9 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-center font-mono text-xs font-bold text-[var(--maya-text-main)] focus:outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-xs font-bold hover:bg-[var(--maya-hover-surface)]"
+                                        @click="form.pieces_count = (parseInt(form.pieces_count) || 1) + 1"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <p v-if="formErrors.pieces_count" class="mt-1 text-[11px] text-red-500">{{ formErrors.pieces_count[0] }}</p>
+                            </div>
+
+                            <!-- Peso en Libras y Kg -->
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Peso (lbs / kg) *
+                                </label>
+                                <div class="mt-1 grid grid-cols-2 gap-1.5">
+                                    <div>
+                                        <input
+                                            v-model="form.weight_lb"
+                                            type="number"
+                                            step="0.1"
+                                            placeholder="lbs"
+                                            class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-2.5 py-2 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                            @input="onWeightLbChange"
+                                        />
+                                    </div>
+                                    <div>
+                                        <input
+                                            v-model="form.weight_kg"
+                                            type="number"
+                                            step="0.01"
+                                            placeholder="kg"
+                                            class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] px-2.5 py-2 font-mono text-xs text-[var(--maya-text-muted)] focus:outline-none"
+                                            @input="onWeightKgChange"
+                                        />
+                                    </div>
+                                </div>
+                                <p v-if="formErrors.weight_lb" class="mt-1 text-[11px] text-red-500">{{ formErrors.weight_lb[0] }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Dimensiones y Costo de Envío -->
+                        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 shrink-0">
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Dimensiones (cm)
                                 </label>
                                 <input
-                                    v-model="form.weight_kg"
+                                    v-model="form.dimensions"
+                                    type="text"
+                                    placeholder="Ej: 30x20x15"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
+                                    Costo de Envío ($)
+                                </label>
+                                <input
+                                    v-model="form.total_cost"
                                     type="number"
                                     step="0.01"
-                                    placeholder="Kg"
-                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] px-3 py-2 font-mono text-xs text-[var(--maya-text-muted)] focus:outline-none"
+                                    placeholder="0.00"
+                                    class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
                                 />
                             </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Dimensiones (L x A x H cm)
-                            </label>
-                            <input
-                                v-model="form.dimensions"
-                                type="text"
-                                placeholder="Ej: 30x20x15"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
-                            />
-                        </div>
-
-                        <div>
-                            <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Costo del Envío ($)
-                            </label>
-                            <input
-                                v-model="form.total_cost"
-                                type="number"
-                                step="0.01"
-                                placeholder="Ej: 15.00"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 font-mono text-xs text-[var(--maya-text-main)] focus:outline-none"
-                            />
                         </div>
 
                         <!-- Estado (solo en edición) -->
-                        <div v-if="editingId">
+                        <div v-if="editingId" class="mt-4 shrink-0">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Estado Actual
+                                Estado del Envío
                             </label>
                             <select
                                 v-model="form.status"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs font-semibold text-[var(--maya-text-main)] focus:outline-none"
+                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
                             >
                                 <option value="pending">Pendiente</option>
                                 <option value="in_warehouse">En bodega</option>
@@ -895,39 +1316,133 @@ onMounted(async () => {
                             </select>
                         </div>
 
-                        <div class="sm:col-span-2">
+                        <!-- Descripción del Contenido (crece para completar la altura) -->
+                        <div class="mt-4 flex-1 flex flex-col">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Descripción del Contenido
+                                Descripción del Contenido / Observaciones
                             </label>
-                            <input
+                            <textarea
                                 v-model="form.content_description"
-                                type="text"
-                                placeholder="Descripción opcional de la mercancía"
-                                class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
-                            />
+                                placeholder="Notas opcionales de mercancía o fragilidad..."
+                                class="mt-1 w-full flex-1 min-h-[90px] rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none resize-none"
+                            ></textarea>
                         </div>
-                    </div>
-
-                    <div class="flex justify-end gap-2 border-t border-[var(--maya-border)] pt-4">
-                        <button
-                            type="button"
-                            class="rounded-xl border border-[var(--maya-border)] px-4 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
-                            @click="closeModal"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] disabled:opacity-50"
-                            :disabled="saving"
-                            @click="saveShipment"
-                        >
-                            {{ saving ? 'Guardando...' : (editingId ? 'Actualizar Paquete' : 'Crear Paquete') }}
-                        </button>
                     </div>
                 </div>
             </div>
-        </Modal>
+
+            <!-- Barra Inferior de Acciones con Verificación en Muelle -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <!-- Resumen en vivo: Verificación de Muelle (Lado Izquierdo) -->
+                    <div class="flex flex-wrap items-center gap-4 sm:gap-6">
+                        <!-- LPN -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
+                                LPN
+                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span
+                                    class="font-mono text-xs font-bold"
+                                    :class="form.lpn_code ? 'text-[var(--maya-text-main)]' : 'text-[var(--maya-text-muted)] italic'"
+                                >
+                                    {{ form.lpn_code ? (form.lpn_code.length >= 21 ? form.lpn_code.slice(0, 18) + '...' : form.lpn_code) : 'Por escanear' }}
+                                </span>
+                                <button
+                                    v-if="form.lpn_code && form.lpn_code.length >= 21"
+                                    type="button"
+                                    class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-primary)] hover:bg-[var(--maya-hover-surface)] shadow-2xs transition"
+                                    title="Ver código LPN completo"
+                                    @click="openQuickViewModal('Código LPN / Pallet', form.lpn_code)"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'eye']" class="text-[10px]" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="hidden sm:block h-7 w-px bg-[var(--maya-border)]"></div>
+
+                        <!-- Documento -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
+                                Documento
+                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-mono text-xs font-semibold text-[var(--maya-text-main)]">
+                                    {{ documentFullText ? (documentFullText.length >= 21 ? documentFullText.slice(0, 18) + '...' : documentFullText) : 'Sin documento' }}
+                                </span>
+                                <button
+                                    v-if="documentFullText && documentFullText.length >= 21"
+                                    type="button"
+                                    class="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-primary)] hover:bg-[var(--maya-hover-surface)] shadow-2xs transition"
+                                    title="Ver documento completo"
+                                    @click="openQuickViewModal('Documento de Origen WMS', documentFullText)"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'eye']" class="text-[10px]" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="hidden sm:block h-7 w-px bg-[var(--maya-border)]"></div>
+
+                        <!-- Bultos / Peso -->
+                        <div class="flex flex-col">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
+                                Bultos / Peso
+                            </span>
+                            <span class="text-xs font-semibold text-[var(--maya-text-main)]">
+                                {{ form.pieces_count || 1 }} bulto(s) · {{ form.weight_lb || 0 }} lbs
+                            </span>
+                        </div>
+
+                        <div class="hidden sm:block h-7 w-px bg-[var(--maya-border)]"></div>
+
+                        <!-- Destinatario -->
+                        <div class="flex flex-col max-w-[180px] sm:max-w-[220px] 2xl:max-w-[320px]">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
+                                Destinatario
+                            </span>
+                            <span class="text-xs font-semibold text-[var(--maya-text-main)] truncate" :title="form.recipient_name">
+                                {{ form.recipient_name || 'Sin especificar' }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Botones de Acción (Lado Derecho) -->
+                    <div class="flex flex-wrap items-center justify-end gap-2 shrink-0 border-t border-[var(--maya-border)] pt-3 xl:border-t-0 xl:pt-0">
+                        <button
+                            type="button"
+                            class="rounded-xl border border-[var(--maya-border)] px-4 py-2 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition"
+                            @click="closeForm"
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            v-if="!editingId"
+                            type="button"
+                            class="inline-flex items-center gap-1.5 rounded-xl border border-[var(--maya-primary)] bg-[var(--maya-primary-alpha)] px-4 py-2 text-xs font-bold text-[var(--maya-primary)] hover:bg-[var(--maya-primary)] hover:text-white transition disabled:opacity-50"
+                            :disabled="saving"
+                            title="Atajo de teclado: Ctrl + Enter"
+                            @click="saveShipment(true)"
+                        >
+                            <font-awesome-icon :icon="['fas', 'bolt']" />
+                            Guardar y Siguiente
+                            <kbd class="ml-1 rounded bg-[var(--maya-primary)]/15 px-1.5 py-0.5 text-[10px] font-mono">Ctrl+↵</kbd>
+                        </button>
+
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition disabled:opacity-50"
+                            :disabled="saving"
+                            @click="saveShipment(false)"
+                        >
+                            {{ saving ? 'Guardando...' : (editingId ? 'Actualizar Paquete' : 'Guardar y Volver') }}
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
 
         <!-- ==================================================================== -->
         <!-- MODAL: DETALLE COMPLETO Y TIMELINE DE TRACKING                       -->
@@ -940,6 +1455,9 @@ onMounted(async () => {
                             <span class="font-mono text-sm font-bold text-[var(--maya-primary)]">{{ detailShipment.tracking_number }}</span>
                             <span class="rounded-full bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 text-xs font-semibold text-[var(--maya-primary)]">
                                 {{ detailShipment.status }}
+                            </span>
+                            <span v-if="detailShipment.lpn_code" class="rounded-full bg-emerald-100 px-2.5 py-0.5 font-mono text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                LPN: {{ detailShipment.lpn_code }}
                             </span>
                         </div>
                         <p class="text-xs text-[var(--maya-text-muted)]">
@@ -956,24 +1474,35 @@ onMounted(async () => {
                 </div>
 
                 <div v-else-if="detailShipment" class="mt-4 space-y-6">
-                    <!-- Ficha resumen -->
+                    <!-- Ficha resumen WMS & Logística -->
                     <div class="grid grid-cols-2 gap-3 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-4 text-xs sm:grid-cols-4">
                         <div>
-                            <span class="text-[var(--maya-text-muted)]">Cliente:</span>
+                            <span class="text-[var(--maya-text-muted)]">Destinatario:</span>
                             <p class="font-bold text-[var(--maya-text-main)]">{{ detailShipment.recipient_name || detailShipment.sender?.full_name || 'N/A' }}</p>
-                            <p v-if="detailShipment.recipient_phone" class="text-[11px] text-[var(--maya-text-muted)]">📞 {{ detailShipment.recipient_phone }}</p>
+                            <p v-if="detailShipment.recipient_phone || detailShipment.sender?.phone" class="font-mono text-[11px] text-[var(--maya-text-muted)]">
+                                📞 {{ detailShipment.recipient_phone || detailShipment.sender?.phone }}
+                            </p>
                         </div>
                         <div>
-                            <span class="text-[var(--maya-text-muted)]">Bodega Origen:</span>
+                            <span class="text-[var(--maya-text-muted)]">Documento WMS:</span>
+                            <p class="font-mono font-bold text-[var(--maya-text-main)]">
+                                {{ detailShipment.reference_number ? `${(detailShipment.reference_type || 'Doc').toUpperCase()}: ${detailShipment.reference_number}` : 'Sin documento' }}
+                            </p>
+                            <p v-if="detailShipment.lpn_code" class="font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
+                                LPN: {{ detailShipment.lpn_code }}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="text-[var(--maya-text-muted)]">Carga / Bultos:</span>
+                            <p class="font-mono font-bold text-[var(--maya-text-main)]">
+                                {{ detailShipment.pieces_count || 1 }} bulto(s) · {{ detailShipment.weight_lb }} lbs
+                            </p>
+                            <p class="text-[11px] capitalize text-[var(--maya-text-muted)]">Tipo: {{ detailShipment.package_type }}</p>
+                        </div>
+                        <div>
+                            <span class="text-[var(--maya-text-muted)]">Bodega / Ruta:</span>
                             <p class="font-bold text-[var(--maya-text-main)]">{{ detailShipment.warehouse_name || detailShipment.warehouse?.name || 'N/A' }}</p>
-                        </div>
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Peso / Tipo:</span>
-                            <p class="font-mono font-bold text-[var(--maya-text-main)]">{{ detailShipment.weight_lb }} lbs ({{ detailShipment.package_type }})</p>
-                        </div>
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Plan Asignado:</span>
-                            <p class="font-mono font-bold text-[var(--maya-primary)]">{{ detailShipment.task_title || detailShipment.assigned_task?.title || 'Sin ruta' }}</p>
+                            <p class="font-mono text-[11px] text-[var(--maya-primary)]">{{ detailShipment.task_title || detailShipment.assigned_task?.title || 'Sin ruta' }}</p>
                         </div>
                     </div>
 
@@ -983,8 +1512,8 @@ onMounted(async () => {
                         <p class="mt-1 text-sm font-medium text-[var(--maya-text-main)]">
                             📍 {{ detailShipment.destination_address }}
                         </p>
-                        <p v-if="detailShipment.sender?.reference_point" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                            📌 Punto de referencia del cliente: {{ detailShipment.sender.reference_point }}
+                        <p v-if="detailShipment.content_description" class="mt-1 text-xs text-[var(--maya-text-muted)]">
+                            📝 Descripción: {{ detailShipment.content_description }}
                         </p>
                     </div>
 
@@ -1034,6 +1563,60 @@ onMounted(async () => {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- ==================================================================== -->
+        <!-- MODAL PEQUEÑO: VISUALIZACIÓN RÁPIDA DE DATO LARGO EN VERIFICACIÓN    -->
+        <!-- ==================================================================== -->
+        <Modal :show="quickViewModalOpen" max-width="md" @close="quickViewModalOpen = false">
+            <div class="p-5">
+                <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)]">
+                            <font-awesome-icon :icon="['fas', 'eye']" class="text-sm" />
+                        </span>
+                        <h3 class="text-sm font-bold text-[var(--maya-text-main)]">
+                            {{ quickViewTitle }}
+                        </h3>
+                    </div>
+                    <button
+                        type="button"
+                        class="text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)] transition"
+                        @click="quickViewModalOpen = false"
+                    >
+                        <font-awesome-icon :icon="['fas', 'xmark']" class="text-base" />
+                    </button>
+                </div>
+
+                <div class="mt-4">
+                    <p class="text-xs text-[var(--maya-text-muted)] mb-1.5">
+                        Valor completo registrado:
+                    </p>
+                    <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                        <p class="break-all font-mono text-xs font-bold text-[var(--maya-text-main)] select-all leading-relaxed">
+                            {{ quickViewValue }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-5 flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3.5 py-1.5 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
+                        @click="copyQuickViewValue"
+                    >
+                        <font-awesome-icon :icon="['fas', copiedQuickView ? 'check' : 'copy']" />
+                        {{ copiedQuickView ? '¡Copiado!' : 'Copiar' }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-xl bg-[var(--maya-primary)] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[var(--maya-primary-dark)] transition"
+                        @click="quickViewModalOpen = false"
+                    >
+                        Cerrar
+                    </button>
                 </div>
             </div>
         </Modal>
