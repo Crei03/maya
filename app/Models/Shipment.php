@@ -47,87 +47,57 @@ class Shipment extends Model
     use HasFactory, HasTenant;
 
     // ============================================================================
-    // Sistema de Estados (Issue #3)
+    // Sistema de Estados Estandarizados (Catálogo en BD)
     // ============================================================================
 
-    /** Pendiente / recién creado */
-    public const STATUS_PENDING = 'pending';
+    public const STATUS_PENDIENTE = 'PENDIENTE';
 
-    /** En bodega */
-    public const STATUS_IN_WAREHOUSE = 'in_warehouse';
+    public const STATUS_EN_BODEGA = 'EN_BODEGA';
 
-    /** Asignado a una tarea de reparto */
-    public const STATUS_ASSIGNED = 'assigned';
+    public const STATUS_ASIGNADO = 'ASIGNADO';
 
-    /** En ruta de entrega */
-    public const STATUS_IN_TRANSIT = 'in_transit';
+    public const STATUS_EN_TRANSITO = 'EN_TRANSITO';
 
-    /** Entregado exitosamente */
-    public const STATUS_DELIVERED = 'delivered';
+    public const STATUS_ENTREGADO = 'ENTREGADO';
 
-    /** Devuelto a bodega */
-    public const STATUS_RETURNED = 'returned';
+    public const STATUS_DEVUELTO = 'DEVUELTO';
 
-    /** Fallido / no entregado */
-    public const STATUS_FAILED = 'failed';
+    public const STATUS_FALLIDO = 'FALLIDO';
 
-    /**
-     * Todos los estados válidos del envío.
-     *
-     * @var array<string>
-     */
-    public const STATUSES = [
-        self::STATUS_PENDING,
-        self::STATUS_IN_WAREHOUSE,
-        self::STATUS_ASSIGNED,
-        self::STATUS_IN_TRANSIT,
-        self::STATUS_DELIVERED,
-        self::STATUS_RETURNED,
-        self::STATUS_FAILED,
-    ];
+    public const STATUS_CANCELADO = 'CANCELADO';
 
-    /**
-     * Etiquetas legibles para los estados.
-     *
-     * @var array<string, string>
-     */
-    public const STATUS_LABELS = [
-        self::STATUS_PENDING => 'Pendiente',
-        self::STATUS_IN_WAREHOUSE => 'En bodega',
-        self::STATUS_ASSIGNED => 'Asignado',
-        self::STATUS_IN_TRANSIT => 'En tránsito',
-        self::STATUS_DELIVERED => 'Entregado',
-        self::STATUS_RETURNED => 'Devuelto',
-        self::STATUS_FAILED => 'Fallido',
-    ];
+    // Alias retrocompatibles
+    public const STATUS_PENDING = self::STATUS_PENDIENTE;
+
+    public const STATUS_IN_WAREHOUSE = self::STATUS_EN_BODEGA;
+
+    public const STATUS_ASSIGNED = self::STATUS_ASIGNADO;
+
+    public const STATUS_IN_TRANSIT = self::STATUS_EN_TRANSITO;
+
+    public const STATUS_DELIVERED = self::STATUS_ENTREGADO;
+
+    public const STATUS_RETURNED = self::STATUS_DEVUELTO;
+
+    public const STATUS_FAILED = self::STATUS_FALLIDO;
 
     // ============================================================================
-    // Tipos de Documento de Referencia WMS / ERP
+    // Tipos de Documento de Referencia (Catálogo en BD)
     // ============================================================================
 
-    public const REF_TYPE_PEDIDO = 'pedido';
+    public const REF_TYPE_PEDIDO = 'PEDIDO';
 
-    public const REF_TYPE_FACTURA = 'factura';
+    public const REF_TYPE_FACTURA = 'FACTURA';
 
-    public const REF_TYPE_TRANSFERENCIA = 'transferencia';
+    public const REF_TYPE_TRANSFERENCIA = 'TRANSFERENCIA';
 
-    public const REF_TYPE_RECIBO = 'recibo';
+    public const REF_TYPE_RECIBO = 'RECIBO';
 
-    public const REF_TYPE_GUIA = 'guia';
+    public const REF_TYPE_GUIA = 'GUIA';
 
-    public const REF_TYPE_LPN = 'lpn';
+    public const REF_TYPE_LPN = 'LPN';
 
-    public const REF_TYPE_OTRO = 'otro';
-
-    public const REF_TYPES = [
-        self::REF_TYPE_PEDIDO => 'Pedido / Orden de Venta',
-        self::REF_TYPE_FACTURA => 'Factura',
-        self::REF_TYPE_TRANSFERENCIA => 'Transferencia',
-        self::REF_TYPE_RECIBO => 'Recibo',
-        self::REF_TYPE_GUIA => 'Guía de Remisión',
-        self::REF_TYPE_LPN => 'LPN / Pallet directo',
-        self::REF_TYPE_OTRO => 'Otro',
-    ];
+    public const REF_TYPE_OTRO = 'OTRO';
 
     // ============================================================================
     // Configuración del modelo
@@ -159,7 +129,10 @@ class Shipment extends Model
         'warehouse_id',
         'driver_task',
         'tracking_number',
+        'status',
+        'status_id',
         'reference_type',
+        'reference_type_id',
         'reference_number',
         'lpn_code',
         'pieces_count',
@@ -173,8 +146,8 @@ class Shipment extends Model
         'total_cost',
         'content_description',
         'package_type',
+        'package_type_id',
         'dimensions',
-        'status',
         'label_url',
         'delivered_photo_url',
         'recipient_signature_url',
@@ -189,6 +162,7 @@ class Shipment extends Model
      */
     protected $appends = [
         'origin_address',
+        'status_code',
     ];
 
     /**
@@ -226,8 +200,8 @@ class Shipment extends Model
             if (empty($shipment->tracking_number)) {
                 $shipment->tracking_number = self::generateTrackingNumber();
             }
-            if (empty($shipment->status)) {
-                $shipment->status = self::STATUS_PENDING;
+            if (empty($shipment->status_id)) {
+                $shipment->status_id = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'PENDIENTE');
             }
         });
     }
@@ -277,11 +251,17 @@ class Shipment extends Model
     }
 
     /**
-     * Scope para filtrar por estado concreto.
+     * Scope para filtrar por estado concreto (id numérico o código string).
      */
-    public function scopeByStatus($query, string $status)
+    public function scopeByStatus($query, $status)
     {
-        return $query->where('status', $status);
+        if (is_numeric($status)) {
+            return $query->where('status_id', (int) $status);
+        }
+
+        return $query->whereHas('status', function ($q) use ($status) {
+            $q->where('codigo', strtoupper((string) $status));
+        });
     }
 
     /**
@@ -289,10 +269,9 @@ class Shipment extends Model
      */
     public function scopeAvailableForDispatch($query)
     {
-        return $query->whereIn('status', [
-            self::STATUS_PENDING,
-            self::STATUS_IN_WAREHOUSE,
-        ]);
+        return $query->whereHas('status', function ($q) {
+            $q->whereIn('codigo', [self::STATUS_PENDIENTE, self::STATUS_EN_BODEGA]);
+        });
     }
 
     /**
@@ -314,6 +293,30 @@ class Shipment extends Model
     // ============================================================================
     // Relaciones
     // ============================================================================
+
+    /**
+     * Estado del ciclo de vida del paquete (Catálogo).
+     */
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'status_id');
+    }
+
+    /**
+     * Tipo de documento de referencia (Catálogo).
+     */
+    public function referenceType(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'reference_type_id');
+    }
+
+    /**
+     * Formato o tipo de paquete físico (Catálogo).
+     */
+    public function packageType(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'package_type_id');
+    }
 
     /**
      * Cliente remitente del envío.
@@ -396,7 +399,9 @@ class Shipment extends Model
      */
     public function isDelivered(): bool
     {
-        return $this->status === self::STATUS_DELIVERED;
+        $code = is_string($this->status) ? $this->status : $this->status?->codigo;
+
+        return $code === self::STATUS_ENTREGADO;
     }
 
     /**
@@ -404,9 +409,11 @@ class Shipment extends Model
      */
     public function isAvailableForDispatch(): bool
     {
-        return in_array($this->status, [
-            self::STATUS_PENDING,
-            self::STATUS_IN_WAREHOUSE,
+        $code = is_string($this->status) ? $this->status : $this->status?->codigo;
+
+        return in_array($code, [
+            self::STATUS_PENDIENTE,
+            self::STATUS_EN_BODEGA,
         ], true);
     }
 
@@ -415,7 +422,7 @@ class Shipment extends Model
      */
     public function getStatusLabel(): string
     {
-        return self::STATUS_LABELS[$this->status] ?? $this->status;
+        return $this->status?->valor ?? '';
     }
 
     /**
@@ -436,5 +443,40 @@ class Shipment extends Model
     public function getOriginAddressAttribute(): string
     {
         return $this->warehouse?->location_address ?? '';
+    }
+
+    /**
+     * Código de estado legible para backward compatibility.
+     */
+    public function getStatusCodeAttribute(): string
+    {
+        return $this->status?->codigo ?? '';
+    }
+
+    public function setStatusAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['status_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $this->attributes['status_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', strtoupper($value));
+        }
+    }
+
+    public function setPackageTypeAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['package_type_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $this->attributes['package_type_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('tipo-paquete', strtoupper($value));
+        }
+    }
+
+    public function setReferenceTypeAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['reference_type_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $this->attributes['reference_type_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('tipo-referencia', strtoupper($value));
+        }
     }
 }

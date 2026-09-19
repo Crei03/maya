@@ -41,6 +41,12 @@ class ReorderShipmentTaskItemsRequest extends FormRequest
                 ShipmentTaskItem::PRIORITY_ALTA => 1,
                 ShipmentTaskItem::PRIORITY_MEDIA => 2,
                 ShipmentTaskItem::PRIORITY_BAJA => 3,
+                'ALTA' => 1,
+                'MEDIA' => 2,
+                'BAJA' => 3,
+                'alta' => 1,
+                'media' => 2,
+                'baja' => 3,
             ];
 
             // Ordenar items por stop_order

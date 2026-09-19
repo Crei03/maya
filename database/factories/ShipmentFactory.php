@@ -42,13 +42,13 @@ class ShipmentFactory extends Factory
             'weight_kg' => $weightKg,
             'total_cost' => $this->faker->randomFloat(2, 5.0, 100.0),
             'content_description' => $this->faker->sentence(),
-            'package_type' => $this->faker->randomElement(['caja', 'sobre', 'palet', 'bolsa', 'tubo']),
+            'package_type_id' => fn () => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('tipo-paquete', 'PAQUETE'),
             'dimensions' => [
                 'largo' => $this->faker->numberBetween(5, 100),
                 'ancho' => $this->faker->numberBetween(5, 100),
                 'alto' => $this->faker->numberBetween(5, 100),
             ],
-            'status' => Shipment::STATUS_PENDING,
+            'status_id' => fn () => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'PENDIENTE'),
             'label_url' => null,
             'delivered_photo_url' => null,
             'recipient_signature_url' => null,
@@ -63,7 +63,7 @@ class ShipmentFactory extends Factory
     public function inWarehouse(Warehouse $warehouse): static
     {
         return $this->state(fn () => [
-            'status' => Shipment::STATUS_IN_WAREHOUSE,
+            'status_id' => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'EN_BODEGA'),
             'warehouse_id' => $warehouse->id,
             'tenant_id' => $warehouse->tenant_id ?? Tenant::current()?->id,
         ]);
@@ -75,7 +75,7 @@ class ShipmentFactory extends Factory
     public function assigned(): static
     {
         return $this->state(fn () => [
-            'status' => Shipment::STATUS_ASSIGNED,
+            'status_id' => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'ASIGNADO'),
         ]);
     }
 
@@ -85,7 +85,7 @@ class ShipmentFactory extends Factory
     public function inTransit(): static
     {
         return $this->state(fn () => [
-            'status' => Shipment::STATUS_IN_TRANSIT,
+            'status_id' => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'EN_TRANSITO'),
         ]);
     }
 
@@ -95,7 +95,7 @@ class ShipmentFactory extends Factory
     public function delivered(): static
     {
         return $this->state(fn () => [
-            'status' => Shipment::STATUS_DELIVERED,
+            'status_id' => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'ENTREGADO'),
             'delivered_at' => now(),
         ]);
     }
@@ -106,7 +106,7 @@ class ShipmentFactory extends Factory
     public function failed(): static
     {
         return $this->state(fn () => [
-            'status' => Shipment::STATUS_FAILED,
+            'status_id' => app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'FALLIDO'),
         ]);
     }
 }

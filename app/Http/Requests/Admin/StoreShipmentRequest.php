@@ -20,7 +20,8 @@ class StoreShipmentRequest extends FormRequest
     {
         return [
             'destination_address' => ['required', 'string', 'max:500'],
-            'package_type' => ['required', 'string', 'max:100'],
+            'package_type' => ['required_without:package_type_id', 'nullable', 'string', 'max:100'],
+            'package_type_id' => ['nullable', 'exists:catalogo_valores,id'],
             'weight_lb' => ['required', 'numeric', 'min:0'],
             'content_description' => ['nullable', 'string'],
             'weight_kg' => ['nullable', 'numeric', 'min:0'],
@@ -31,6 +32,8 @@ class StoreShipmentRequest extends FormRequest
             'recipient_phone' => ['nullable', 'string', 'max:50'],
             'warehouse_id' => ['required', 'exists:warehouses,id'],
             'reference_type' => ['nullable', 'string', 'max:50'],
+            'reference_type_id' => ['nullable', 'exists:catalogo_valores,id'],
+            'status_id' => ['nullable', 'exists:catalogo_valores,id'],
             'reference_number' => ['nullable', 'string', 'max:100'],
             'lpn_code' => ['nullable', 'string', 'max:100'],
             'pieces_count' => ['nullable', 'integer', 'min:1'],

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Shipment;
 use App\Models\Warehouse;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\ValidationException;
@@ -93,7 +92,13 @@ class WarehouseService
     {
         $warehouse = $this->find($id);
 
-        if ($warehouse->shipments()->whereNotIn('status', [Shipment::STATUS_DELIVERED])->exists()) {
+        $deliveredStatusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-envio', 'ENTREGADO');
+
+        $hasActiveShipments = $warehouse->shipments()
+            ->when($deliveredStatusId, fn ($q) => $q->where('status_id', '!=', $deliveredStatusId))
+            ->exists();
+
+        if ($hasActiveShipments) {
             throw ValidationException::withMessages([
                 'warehouse' => 'No se puede eliminar la bodega con envíos activos.',
             ]);

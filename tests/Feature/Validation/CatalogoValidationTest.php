@@ -101,7 +101,7 @@ class CatalogoValidationTest extends TestCase
         ]);
     }
 
-    public function test_store_valor_request_codigo_over_3_chars_rejected(): void
+    public function test_store_valor_request_codigo_over_100_chars_rejected(): void
     {
         $catalogo = Catalogo::query()->create([
             'nombre' => 'Test',
@@ -112,7 +112,7 @@ class CatalogoValidationTest extends TestCase
         $response = $this->actingAs($this->superAdmin)
             ->post('/management/catalogos/'.$catalogo->id.'/valores', [
                 'catalogo_id' => $catalogo->id,
-                'codigo' => 'TOOLONG',
+                'codigo' => str_repeat('A', 101),
                 'valor' => 'Test',
             ]);
 

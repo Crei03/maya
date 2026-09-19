@@ -31,7 +31,9 @@ class VehicleUpdateRequest extends FormRequest
                     ->where(fn ($q) => $q->where('tenant_id', $tenantId))
                     ->ignore($vehicleId),
             ],
-            'type' => ['required', Rule::in(['internal', 'external'])],
+            'ownership_type_id' => ['nullable', 'exists:catalogo_valores,id'],
+            'vehicle_class_id' => ['nullable', 'exists:catalogo_valores,id'],
+            'type' => ['nullable', 'string'],
             'brand' => ['required', 'string', 'max:100'],
             'model' => ['required', 'string', 'max:100'],
             'year' => ['required', 'integer', 'min:1900', 'max:2100'],

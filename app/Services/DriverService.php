@@ -26,7 +26,7 @@ class DriverService
             ->with('driverProfile')
             ->withCount([
                 'shipmentTasks as active_tasks_count' => function ($q) {
-                    $q->whereIn('status', ['pending', 'in_progress']);
+                    $q->active();
                 },
             ])
             ->when(
@@ -69,7 +69,7 @@ class DriverService
             ->with('driverProfile')
             ->withCount([
                 'shipmentTasks as active_tasks_count' => function ($q) {
-                    $q->whereIn('status', ['pending', 'in_progress']);
+                    $q->active();
                 },
             ])
             ->findOrFail($id);

@@ -24,7 +24,7 @@ class ShipmentService
         $query = Shipment::query()->orderByDesc('created_at');
 
         if (! empty($filters['status'] ?? null)) {
-            $query->where('status', $filters['status']);
+            $query->byStatus($filters['status']);
         }
 
         if (! empty($filters['search'] ?? null)) {
@@ -44,7 +44,13 @@ class ShipmentService
         }
 
         if (! empty($filters['reference_type'] ?? null)) {
-            $query->where('reference_type', $filters['reference_type']);
+            if (is_numeric($filters['reference_type'])) {
+                $query->where('reference_type_id', (int) $filters['reference_type']);
+            } else {
+                $query->whereHas('referenceType', function (Builder $q) use ($filters): void {
+                    $q->where('codigo', strtoupper((string) $filters['reference_type']));
+                });
+            }
         }
 
         if (! empty($filters['lpn_code'] ?? null)) {
@@ -56,7 +62,13 @@ class ShipmentService
         }
 
         if (! empty($filters['package_type'] ?? null)) {
-            $query->where('package_type', $filters['package_type']);
+            if (is_numeric($filters['package_type'])) {
+                $query->where('package_type_id', (int) $filters['package_type']);
+            } else {
+                $query->whereHas('packageType', function (Builder $q) use ($filters): void {
+                    $q->where('codigo', strtoupper((string) $filters['package_type']));
+                });
+            }
         }
 
         if (! empty($filters['date_from'] ?? null)) {
@@ -80,6 +92,9 @@ class ShipmentService
             'warehouse:id,name',
             'driverTask:id,title,driver_id',
             'sender:id,first_name,last_name,full_name,phone',
+            'status',
+            'referenceType',
+            'packageType',
         ]);
 
         return [
@@ -115,6 +130,9 @@ class ShipmentService
             'warehouse',
             'driverTask',
             'sender',
+            'status',
+            'referenceType',
+            'packageType',
             'trackingEvents' => fn ($query) => $query->latest('timestamp')->limit(50),
         ]);
 
@@ -128,6 +146,8 @@ class ShipmentService
      */
     public function create(array $data): Shipment
     {
+        $data = $this->resolveCatalogIds($data);
+
         // Si viene sender_id pero no recipient_name, sincronizar desde el cliente
         if (! empty($data['sender_id']) && empty($data['recipient_name'])) {
             $client = \App\Models\Client::find($data['sender_id']);
@@ -156,6 +176,8 @@ class ShipmentService
         if ($shipment === null) {
             throw (new ModelNotFoundException)->setModel(Shipment::class, $id);
         }
+
+        $data = $this->resolveCatalogIds($data);
 
         $shipment->fill($data)->save();
 
@@ -192,6 +214,40 @@ class ShipmentService
     }
 
     /**
+     * Resuelve claves o códigos de catálogo a sus respectivos IDs en base de datos.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function resolveCatalogIds(array $data): array
+    {
+        $catalogoService = app(CatalogoService::class);
+
+        if (isset($data['status']) && empty($data['status_id'])) {
+            $data['status_id'] = is_numeric($data['status'])
+                ? (int) $data['status']
+                : $catalogoService->getValorIdByCodigo('estado-envio', (string) $data['status']);
+            unset($data['status']);
+        }
+
+        if (isset($data['reference_type']) && empty($data['reference_type_id'])) {
+            $data['reference_type_id'] = is_numeric($data['reference_type'])
+                ? (int) $data['reference_type']
+                : $catalogoService->getValorIdByCodigo('tipo-referencia', (string) $data['reference_type']);
+            unset($data['reference_type']);
+        }
+
+        if (isset($data['package_type']) && empty($data['package_type_id'])) {
+            $data['package_type_id'] = is_numeric($data['package_type'])
+                ? (int) $data['package_type']
+                : $catalogoService->getValorIdByCodigo('tipo-paquete', (string) $data['package_type']);
+            unset($data['package_type']);
+        }
+
+        return $data;
+    }
+
+    /**
      * Map a Shipment model to an array, including loaded relationships.
      *
      * @return array<string, mixed>
@@ -208,6 +264,41 @@ class ShipmentService
         if ($shipment->relationLoaded('driverTask') && $shipment->driverTask) {
             $data['assigned_task'] = $shipment->driverTask->toArray();
             $data['task_title'] = $shipment->driverTask->title;
+        }
+
+        if ($shipment->relationLoaded('status') && $shipment->status) {
+            $statusModel = $shipment->getRelation('status');
+            $statusCode = $statusModel?->codigo ?? (string) $shipment->status;
+            $data['status'] = $statusCode;
+            $data['status_data'] = $statusModel ? $statusModel->toArray() : ['codigo' => $statusCode, 'valor' => $statusCode];
+            $data['status_code'] = $statusCode;
+            $data['status_label'] = $statusModel?->valor ?? $statusCode;
+            $data['status_metadata'] = $statusModel?->metadata ?? [];
+        } else {
+            $data['status'] = '';
+            $data['status_code'] = '';
+            $data['status_label'] = '';
+            $data['status_metadata'] = [];
+        }
+
+        if ($shipment->relationLoaded('referenceType') && $shipment->referenceType) {
+            $refModel = $shipment->getRelation('referenceType');
+            $refCode = $refModel?->codigo ?? (string) $shipment->referenceType;
+            $data['reference_type'] = strtolower($refCode);
+            $data['reference_type_data'] = $refModel ? $refModel->toArray() : ['codigo' => $refCode, 'valor' => $refCode];
+            $data['reference_type_code'] = $refCode;
+            $data['reference_type_label'] = $refModel?->valor ?? $refCode;
+            $data['reference_type_metadata'] = $refModel?->metadata ?? [];
+        }
+
+        if ($shipment->relationLoaded('packageType') && $shipment->packageType) {
+            $pkgModel = $shipment->getRelation('packageType');
+            $pkgCode = $pkgModel?->codigo ?? (string) $shipment->packageType;
+            $data['package_type'] = strtolower($pkgCode);
+            $data['package_type_data'] = $pkgModel ? $pkgModel->toArray() : ['codigo' => $pkgCode, 'valor' => $pkgCode];
+            $data['package_type_code'] = $pkgCode;
+            $data['package_type_label'] = $pkgModel?->valor ?? $pkgCode;
+            $data['package_type_metadata'] = $pkgModel?->metadata ?? [];
         }
 
         $clientName = $shipment->recipient_name;

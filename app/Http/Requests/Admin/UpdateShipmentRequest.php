@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin;
 
-use App\Models\Shipment;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateShipmentRequest extends FormRequest
@@ -21,7 +20,8 @@ class UpdateShipmentRequest extends FormRequest
     {
         return [
             'destination_address' => ['sometimes', 'string', 'max:500'],
-            'package_type' => ['sometimes', 'string', 'max:100'],
+            'package_type' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'package_type_id' => ['sometimes', 'nullable', 'exists:catalogo_valores,id'],
             'weight_lb' => ['sometimes', 'numeric', 'min:0'],
             'content_description' => ['sometimes', 'nullable', 'string'],
             'weight_kg' => ['sometimes', 'nullable', 'numeric', 'min:0'],
@@ -32,11 +32,13 @@ class UpdateShipmentRequest extends FormRequest
             'recipient_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'warehouse_id' => ['sometimes', 'nullable', 'exists:warehouses,id'],
             'reference_type' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'reference_type_id' => ['sometimes', 'nullable', 'exists:catalogo_valores,id'],
             'reference_number' => ['sometimes', 'nullable', 'string', 'max:100'],
             'lpn_code' => ['sometimes', 'nullable', 'string', 'max:100'],
             'pieces_count' => ['sometimes', 'nullable', 'integer', 'min:1'],
             'total_cost' => ['sometimes', 'nullable', 'numeric', 'min:0'],
-            'status' => ['sometimes', 'string', 'in:'.implode(',', Shipment::STATUSES)],
+            'status' => ['sometimes', 'nullable'],
+            'status_id' => ['sometimes', 'nullable', 'exists:catalogo_valores,id'],
         ];
     }
 

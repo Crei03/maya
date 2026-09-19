@@ -60,6 +60,8 @@ class Vehicle extends Model
         'tenant_id',
         'license_plate',
         'type',
+        'ownership_type_id',
+        'vehicle_class_id',
         'brand',
         'model',
         'year',
@@ -90,12 +92,25 @@ class Vehicle extends Model
             if (empty($vehicle->id)) {
                 $vehicle->id = (string) Str::uuid();
             }
+            if (empty($vehicle->ownership_type_id)) {
+                $vehicle->ownership_type_id = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('tipo-vehiculo-propiedad', 'INTERNO');
+            }
         });
     }
 
     // ============================================================================
     // Relaciones
     // ============================================================================
+
+    public function ownershipType(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'ownership_type_id');
+    }
+
+    public function vehicleClass(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'vehicle_class_id');
+    }
 
     public function tenant(): BelongsTo
     {
@@ -113,11 +128,21 @@ class Vehicle extends Model
 
     public function getTypeLabel(): string
     {
-        return self::TYPE_LABELS[$this->type] ?? $this->type;
+        return $this->ownershipType?->valor ?? '';
     }
 
     public function isInternal(): bool
     {
-        return $this->type === self::TYPE_INTERNAL;
+        return $this->ownershipType?->codigo === 'INTERNO';
+    }
+
+    public function setTypeAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['ownership_type_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $code = strtolower($value) === 'external' ? 'EXTERNO' : 'INTERNO';
+            $this->attributes['ownership_type_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('tipo-vehiculo-propiedad', $code);
+        }
     }
 }

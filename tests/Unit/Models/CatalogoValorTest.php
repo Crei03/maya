@@ -28,6 +28,16 @@ class CatalogoValorTest extends TestCase
         ]);
     }
 
+    private function createTenant(string $slug = 'test'): \App\Models\Tenant
+    {
+        return \App\Models\Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'slug' => $slug,
+            'name' => "Tenant {$slug}",
+            'status' => 'active',
+        ]);
+    }
+
     public function test_scope_global_returns_global_valores(): void
     {
         CatalogoValor::query()->create([
@@ -38,12 +48,13 @@ class CatalogoValorTest extends TestCase
             'tenant_id' => null,
         ]);
 
+        $tenant = $this->createTenant('ten-glo');
         CatalogoValor::query()->create([
             'catalogo_id' => $this->catalogo->id,
             'codigo' => 'TEN',
             'valor' => 'Tenant',
             'is_global' => false,
-            'tenant_id' => (string) Str::uuid(),
+            'tenant_id' => $tenant->id,
         ]);
 
         $result = CatalogoValor::query()->global()->get();
@@ -54,7 +65,8 @@ class CatalogoValorTest extends TestCase
 
     public function test_scope_visible_by_tenant_returns_global_and_tenant_valores(): void
     {
-        $tenantId = (string) Str::uuid();
+        $tenantA = $this->createTenant('tenant-a');
+        $tenantB = $this->createTenant('tenant-b');
 
         $global = CatalogoValor::query()->create([
             'catalogo_id' => $this->catalogo->id,
@@ -69,7 +81,7 @@ class CatalogoValorTest extends TestCase
             'codigo' => 'TEN',
             'valor' => 'Tenant Owned',
             'is_global' => false,
-            'tenant_id' => $tenantId,
+            'tenant_id' => $tenantA->id,
         ]);
 
         CatalogoValor::query()->create([
@@ -77,10 +89,10 @@ class CatalogoValorTest extends TestCase
             'codigo' => 'OTH',
             'valor' => 'Other Tenant',
             'is_global' => false,
-            'tenant_id' => (string) Str::uuid(),
+            'tenant_id' => $tenantB->id,
         ]);
 
-        $result = CatalogoValor::query()->visibleByTenant($tenantId)->get();
+        $result = CatalogoValor::query()->visibleByTenant($tenantA->id)->get();
 
         $this->assertCount(2, $result);
         $this->assertTrue($result->contains('id', $global->id));

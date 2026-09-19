@@ -7,82 +7,108 @@ import Filters from '@/Components/buttons/Filters.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
 
+const props = defineProps({
+    ownershipTypes: {
+        type: Array,
+        default: () => [],
+    },
+    vehicleClasses: {
+        type: Array,
+        default: () => [],
+    },
+});
+
 const activeSectionTitle = 'Transportes';
 
 const columns = [
-    { key: 'license_plate',  label: 'Placa'    },
-    { key: 'type_label',     label: 'Tipo'     },
-    { key: 'brand',          label: 'Marca'    },
-    { key: 'model',          label: 'Modelo'   },
-    { key: 'year',           label: 'Año'      },
-    { key: 'is_active',      label: 'Estado'   },
-    { key: 'actions',        label: 'Acciones' },
+    { key: 'license_plate', label: 'Placa' },
+    { key: 'type_label', label: 'Tipo Propiedad' },
+    { key: 'vehicle_class_label', label: 'Clase' },
+    { key: 'brand', label: 'Marca' },
+    { key: 'model', label: 'Modelo' },
+    { key: 'year', label: 'Año' },
+    { key: 'is_active', label: 'Estado' },
+    { key: 'actions', label: 'Acciones' },
 ];
 
 const defaultVisibleColumns = columns.map((c) => c.key);
 const visibleColumns = ref([...defaultVisibleColumns]);
 
-const loading  = ref(false);
-const saving   = ref(false);
+const loading = ref(false);
+const saving = ref(false);
 const vehicles = ref([]);
 const pagination = ref(null);
 const successMessage = ref('');
 
 const filters = reactive({
-    search:    '',
-    type:      '',
+    search: '',
+    type: '',
     is_active: '',
 });
 
 const modalOpen = ref(false);
-const errors    = ref({});
+const errors = ref({});
 const editingId = ref(null);
 
 const showFilters = ref(false);
 const currentPage = ref(1);
-const perPage     = ref(15);
+const perPage = ref(15);
 
 const form = reactive({
-    license_plate:   '',
-    type:            'internal',
-    brand:           '',
-    model:           '',
-    year:            new Date().getFullYear(),
-    capacity_kg:     '',
+    license_plate: '',
+    ownership_type_id: null,
+    vehicle_class_id: null,
+    brand: '',
+    model: '',
+    year: new Date().getFullYear(),
+    capacity_kg: '',
     capacity_volume: '',
-    color:           '',
-    is_active:       true,
-    notes:           '',
+    color: '',
+    is_active: true,
+    notes: '',
 });
 
-const filterFields = [
+const filterFields = computed(() => [
     { key: 'search', type: 'text', placeholder: 'Buscar por placa' },
     {
-        key: 'type', type: 'select', placeholder: 'Todos los tipos',
-        options: [
-            { id: 'internal', valor: 'Interno'         },
-            { id: 'external', valor: 'Externo'         },
-        ],
+        key: 'type',
+        type: 'select',
+        placeholder: 'Todos los tipos',
+        options: props.ownershipTypes?.length
+            ? props.ownershipTypes.map((t) => ({ id: t.id, valor: t.valor }))
+            : [
+                { id: 'internal', valor: 'Interno' },
+                { id: 'external', valor: 'Externo' },
+            ],
     },
-];
+]);
 
 const vehicleFormFields = computed(() => [
-    { key: 'license_plate',   label: 'Placa',                 type: 'text',   placeholder: 'Ej: ABC-1234' },
+    { key: 'license_plate', label: 'Placa', type: 'text', placeholder: 'Ej: ABC-1234' },
     {
-        key: 'type', label: 'Tipo', type: 'select',
-        options: [
-            { id: 'internal', valor: 'Interno' },
-            { id: 'external', valor: 'Externo' },
-        ],
+        key: 'ownership_type_id',
+        label: 'Tipo de Propiedad',
+        type: 'select',
+        valueType: 'number',
+        placeholder: 'Seleccionar tipo',
+        options: props.ownershipTypes?.map((t) => ({ id: t.id, valor: t.valor })) || [],
     },
-    { key: 'brand',           label: 'Marca',                 type: 'text',   placeholder: 'Ej: Toyota'  },
-    { key: 'model',           label: 'Modelo',                type: 'text',   placeholder: 'Ej: Hiace'   },
-    { key: 'year',            label: 'Año',                   type: 'number', placeholder: '2024'        },
-    { key: 'capacity_kg',     label: 'Capacidad (kg)',         type: 'number', placeholder: 'Opcional'    },
-    { key: 'capacity_volume', label: 'Capacidad volumétrica',  type: 'number',   placeholder: 'Opcional'    },
-    { key: 'color',           label: 'Color',                 type: 'text',   placeholder: 'Opcional'    },
-    { key: 'notes',           label: 'Notas',                 type: 'text',   placeholder: 'Opcional'    },
-    { key: 'is_active',       label: 'Activo',                type: 'switch'                              },
+    {
+        key: 'vehicle_class_id',
+        label: 'Clase de Vehículo',
+        type: 'select',
+        valueType: 'number',
+        placeholder: 'Seleccionar clase (opcional)',
+        options: props.vehicleClasses?.map((c) => ({ id: c.id, valor: c.valor })) || [],
+    },
+    { key: 'brand', label: 'Marca', type: 'text', placeholder: 'Ej: Toyota' },
+    { key: 'model', label: 'Modelo', type: 'text', placeholder: 'Ej: Hiace' },
+    { key: 'year', label: 'Año', type: 'number', placeholder: '2024' },
+    { key: 'capacity_kg', label: 'Capacidad (kg)', type: 'number', placeholder: 'Opcional' },
+    { key: 'capacity_volume', label: 'Capacidad volumétrica', type: 'number', placeholder: 'Opcional' },
+    { key: 'color', label: 'Color', type: 'text', placeholder: 'Opcional' },
+    { key: 'notes', label: 'Notas', type: 'text', placeholder: 'Opcional' },
+    { key: 'is_active', label: 'Activo', type: 'switch' },
 ]);
 
 
@@ -92,18 +118,19 @@ const backToSections = () => {
 
 const resetForm = () => {
     Object.assign(form, {
-        license_plate:   '',
-        type:            'internal',
-        brand:           '',
-        model:           '',
-        year:            new Date().getFullYear(),
-        capacity_kg:     '',
+        license_plate: '',
+        ownership_type_id: props.ownershipTypes?.[0]?.id ?? null,
+        vehicle_class_id: props.vehicleClasses?.[0]?.id ?? null,
+        brand: '',
+        model: '',
+        year: new Date().getFullYear(),
+        capacity_kg: '',
         capacity_volume: '',
-        color:           '',
-        is_active:       true,
-        notes:           '',
+        color: '',
+        is_active: true,
+        notes: '',
     });
-    errors.value    = {};
+    errors.value = {};
     editingId.value = null;
 };
 
@@ -119,20 +146,21 @@ const closeModal = () => {
 
 const openEditModal = (vehicle) => {
     successMessage.value = '';
-    editingId.value      = vehicle.id;
+    editingId.value = vehicle.id;
     Object.assign(form, {
-        license_plate:   vehicle.license_plate,
-        type:            vehicle.type,
-        brand:           vehicle.brand,
-        model:           vehicle.model,
-        year:            vehicle.year,
-        capacity_kg:     vehicle.capacity_kg ?? '',
+        license_plate: vehicle.license_plate,
+        ownership_type_id: vehicle.ownership_type_id ?? (vehicle.type === 'external' ? props.ownershipTypes?.find((t) => t.codigo === 'EXTERNO')?.id : props.ownershipTypes?.find((t) => t.codigo === 'INTERNO')?.id) ?? null,
+        vehicle_class_id: vehicle.vehicle_class_id ?? null,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        capacity_kg: vehicle.capacity_kg ?? '',
         capacity_volume: vehicle.capacity_volume ?? '',
-        color:           vehicle.color ?? '',
-        is_active:       vehicle.is_active,
-        notes:           vehicle.notes ?? '',
+        color: vehicle.color ?? '',
+        is_active: vehicle.is_active,
+        notes: vehicle.notes ?? '',
     });
-    errors.value    = {};
+    errors.value = {};
     modalOpen.value = true;
 };
 
@@ -328,16 +356,27 @@ onMounted(async () => {
                         </span>
                     </template>
 
-                    <!-- Tipo -->
+                    <!-- Tipo Propiedad -->
                     <template #cell-type_label="{ row }">
                         <span
                             class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
-                            :class="row.type === 'internal'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-purple-100 text-purple-700'"
+                            :class="row.type === 'internal' || row.ownership_type?.codigo === 'INTERNO'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                                : 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300'"
                         >
-                            {{ row.type_label }}
+                            {{ row.type_label || row.ownership_type?.valor || (row.type === 'internal' ? 'Interno' : 'Externo') }}
                         </span>
+                    </template>
+
+                    <!-- Clase -->
+                    <template #cell-vehicle_class_label="{ row }">
+                        <span
+                            v-if="row.vehicle_class_label || row.vehicle_class?.valor"
+                            class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                            {{ row.vehicle_class_label || row.vehicle_class?.valor }}
+                        </span>
+                        <span v-else class="text-xs text-[var(--maya-text-muted)]">-</span>
                     </template>
                     <!-- Acciones -->
                     <template #cell-actions="{ row }">

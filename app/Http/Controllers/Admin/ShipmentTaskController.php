@@ -27,7 +27,15 @@ class ShipmentTaskController extends Controller
      */
     public function page(): Response
     {
-        return Inertia::render('Admin/PlanesEntrega/Index');
+        $cs = app(\App\Services\CatalogoService::class);
+
+        return Inertia::render('Admin/PlanesEntrega/Index', [
+            'taskStatuses' => $cs->getValoresBySlug('estado-tarea'),
+            'itemStatuses' => $cs->getValoresBySlug('estado-item-tarea'),
+            'priorities' => $cs->getValoresBySlug('prioridad-tarea'),
+            'referenceTypes' => $cs->getValoresBySlug('tipo-referencia'),
+            'packageTypes' => $cs->getValoresBySlug('tipo-paquete'),
+        ]);
     }
 
     /**

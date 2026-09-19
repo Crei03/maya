@@ -166,7 +166,7 @@ class ClientService
         $client = $this->find($id);
 
         $shipments = $client->shipments()
-            ->with(['warehouse:id,name', 'driverTask.driver:id,name'])
+            ->with(['warehouse:id,name', 'driverTask.driver:id,name', 'status', 'packageType'])
             ->latest('created_at')
             ->get();
 
@@ -176,8 +176,10 @@ class ClientService
                 return [
                     'id' => $s->id,
                     'tracking_number' => $s->tracking_number,
-                    'status' => $s->status,
-                    'package_type' => $s->package_type,
+                    'status' => $s->status?->codigo ?? $s->status_code,
+                    'status_label' => $s->status?->valor ?? '',
+                    'package_type' => $s->packageType?->valor ?? $s->packageType?->codigo,
+                    'package_type_code' => $s->packageType?->codigo,
                     'weight_lb' => $s->weight_lb,
                     'total_cost' => $s->total_cost,
                     'destination_address' => $s->destination_address,

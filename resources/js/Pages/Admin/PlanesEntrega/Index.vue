@@ -14,6 +14,37 @@ const perPage = ref(15);
 const successMessage = ref('');
 const errorMessage = ref('');
 
+const props = defineProps({
+    taskStatuses: { type: Array, default: () => [] },
+    itemStatuses: { type: Array, default: () => [] },
+    priorities: { type: Array, default: () => [] },
+    referenceTypes: { type: Array, default: () => [] },
+    packageTypes: { type: Array, default: () => [] },
+});
+
+// Helpers de normalización de estados
+const isTaskPending = (task) => task?.status === 'pending' || task?.status === 'PENDIENTE' || task?.status_code === 'PENDIENTE';
+const isTaskInProgress = (task) => task?.status === 'in_progress' || task?.status === 'EN_PROCESO' || task?.status_code === 'EN_PROCESO';
+const isTaskCompleted = (task) => task?.status === 'completed' || task?.status === 'COMPLETADA' || task?.status_code === 'COMPLETADA';
+const isTaskCancelled = (task) => task?.status === 'cancelled' || task?.status === 'CANCELADA' || task?.status_code === 'CANCELADA';
+
+const isItemDelivered = (item) => item?.status === 'entregado' || item?.status === 'ENTREGADO' || item?.status_code === 'ENTREGADO';
+const isItemReturned = (item) => item?.status === 'retornado' || item?.status === 'RETORNADO' || item?.status_code === 'RETORNADO';
+const isItemPending = (item) => item?.status === 'pendiente' || item?.status === 'PENDIENTE' || item?.status_code === 'PENDIENTE';
+
+const isPriorityHigh = (p) => {
+    const val = typeof p === 'object' ? (p?.priority_code || p?.priority) : p;
+    return val === 'alta' || val === 'ALTA';
+};
+const isPriorityMedium = (p) => {
+    const val = typeof p === 'object' ? (p?.priority_code || p?.priority) : p;
+    return val === 'media' || val === 'MEDIA';
+};
+const isPriorityLow = (p) => {
+    const val = typeof p === 'object' ? (p?.priority_code || p?.priority) : p;
+    return val === 'baja' || val === 'BAJA';
+};
+
 const filters = reactive({
     search: '',
     status: '',
@@ -82,8 +113,11 @@ const savingReorder = ref(false);
 // --- Ranking de Prioridades para Regla de Negocio ---
 const PRIORITY_RANK = {
     alta: 1,
+    ALTA: 1,
     media: 2,
+    MEDIA: 2,
     baja: 3,
+    BAJA: 3,
 };
 
 // --- Computed Helpers ---
@@ -852,10 +886,17 @@ onUnmounted(() => {
                             @change="fetchTasks(1)"
                         >
                             <option value="">Todos los estados</option>
-                            <option value="pending">Pendiente</option>
-                            <option value="in_progress">En curso</option>
-                            <option value="completed">Completado</option>
-                            <option value="cancelled">Cancelado</option>
+                            <template v-if="taskStatuses?.length">
+                                <option v-for="st in taskStatuses" :key="st.id" :value="st.codigo">
+                                    {{ st.valor }}
+                                </option>
+                            </template>
+                            <template v-else>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="EN_PROCESO">En curso</option>
+                                <option value="COMPLETADA">Completado</option>
+                                <option value="CANCELADA">Cancelado</option>
+                            </template>
                         </select>
                     </div>
 
@@ -918,7 +959,7 @@ onUnmounted(() => {
                             <div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--maya-hover-surface)] border border-[var(--maya-border)]">
                                 <div
                                     class="h-full rounded-full transition-all duration-300"
-                                    :class="row.status === 'completed' ? 'bg-green-500' : 'bg-[var(--maya-primary)]'"
+                                    :class="isTaskCompleted(row) ? 'bg-green-500' : 'bg-[var(--maya-primary)]'"
                                     :style="{ width: `${row.progress_percent || 0}%` }"
                                 />
                             </div>
@@ -934,14 +975,14 @@ onUnmounted(() => {
                     <template #cell-status="{ row }">
                         <div class="flex flex-col gap-1 items-start">
                             <span
-                                v-if="row.status === 'pending'"
+                                v-if="isTaskPending(row)"
                                 class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                             >
                                 <font-awesome-icon :icon="['fas', 'clock']" class="text-[10px]" />
                                 Pendiente
                             </span>
                             <span
-                                v-else-if="row.status === 'in_progress'"
+                                v-else-if="isTaskInProgress(row)"
                                 class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                             >
                                 <span class="relative flex h-2 w-2">
@@ -951,14 +992,14 @@ onUnmounted(() => {
                                 En curso
                             </span>
                             <span
-                                v-else-if="row.status === 'completed'"
+                                v-else-if="isTaskCompleted(row)"
                                 class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-300"
                             >
                                 <font-awesome-icon :icon="['fas', 'check']" class="text-[10px]" />
                                 Completado
                             </span>
                             <span
-                                v-else-if="row.status === 'cancelled'"
+                                v-else-if="isTaskCancelled(row)"
                                 class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800 dark:bg-red-900/30 dark:text-red-300"
                             >
                                 <font-awesome-icon :icon="['fas', 'xmark']" class="text-[10px]" />
@@ -966,17 +1007,18 @@ onUnmounted(() => {
                             </span>
                             <span
                                 v-else
-                                class="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                                :class="row.status_metadata?.badge || 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
                             >
-                                {{ row.status }}
+                                {{ row.status_label || row.status }}
                             </span>
 
                             <!-- Cronómetro o Duración -->
-                            <div v-if="row.status === 'in_progress' && (row.start_date_raw || row.start_date)" class="flex items-center gap-1 font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                            <div v-if="isTaskInProgress(row) && (row.start_date_raw || row.start_date)" class="flex items-center gap-1 font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400">
                                 <font-awesome-icon :icon="['fas', 'clock']" class="text-[10px]" />
                                 <span>{{ formatElapsedTime(row.start_date_raw || row.start_date) }}</span>
                             </div>
-                            <div v-else-if="row.status === 'completed' && row.total_hours !== null" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
+                            <div v-else-if="isTaskCompleted(row) && row.total_hours !== null" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
                                 Duración: {{ row.total_hours }}h
                             </div>
                         </div>
@@ -985,7 +1027,7 @@ onUnmounted(() => {
                     <template #cell-actions="{ row }">
                         <div class="flex items-center gap-1.5">
                             <button
-                                v-if="row.status === 'pending'"
+                                v-if="isTaskPending(row)"
                                 type="button"
                                 title="Iniciar Ruta"
                                 class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
@@ -996,7 +1038,7 @@ onUnmounted(() => {
                             </button>
 
                             <button
-                                v-else-if="row.status === 'in_progress'"
+                                v-else-if="isTaskInProgress(row)"
                                 type="button"
                                 title="Finalizar Ruta"
                                 class="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-green-700"
@@ -1017,7 +1059,7 @@ onUnmounted(() => {
                             </button>
 
                             <button
-                                v-if="row.status !== 'completed' && row.status !== 'cancelled'"
+                                v-if="!isTaskCompleted(row) && !isTaskCancelled(row)"
                                 type="button"
                                 title="Cancelar Plan de Entrega"
                                 class="inline-flex items-center justify-center rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20"
@@ -1338,10 +1380,17 @@ onUnmounted(() => {
                                             v-model="quickStopForm.package_type"
                                             class="mt-1 w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
                                         >
-                                            <option value="caja">Caja</option>
-                                            <option value="sobre">Sobre</option>
-                                            <option value="paquete">Paquete</option>
-                                            <option value="palet">Palet</option>
+                                            <template v-if="props.packageTypes?.length">
+                                                <option v-for="pkg in props.packageTypes" :key="pkg.id" :value="pkg.codigo">
+                                                    {{ pkg.valor }}
+                                                </option>
+                                            </template>
+                                            <template v-else>
+                                                <option value="CAJA">Caja</option>
+                                                <option value="SOBRE">Sobre</option>
+                                                <option value="PAQUETE">Paquete</option>
+                                                <option value="PALET">Palet</option>
+                                            </template>
                                         </select>
                                     </div>
                                     <div>
@@ -1447,7 +1496,7 @@ onUnmounted(() => {
                                     v-for="(item, index) in wizardForm.items"
                                     :key="item.temp_id || item.id"
                                     class="flex items-center justify-between rounded-xl border p-3 transition"
-                                    :class="item.priority === 'alta' ? 'border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/10' : item.priority === 'media' ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/10' : 'border-[var(--maya-border)] bg-[var(--maya-hover-surface)]'"
+                                    :class="isPriorityHigh(item) ? 'border-red-200 bg-red-50/40 dark:border-red-900/40 dark:bg-red-950/10' : isPriorityMedium(item) ? 'border-amber-200 bg-amber-50/30 dark:border-amber-900/40 dark:bg-amber-950/10' : 'border-[var(--maya-border)] bg-[var(--maya-hover-surface)]'"
                                 >
                                     <div class="flex items-start gap-3">
                                         <!-- Número de parada -->
@@ -1469,9 +1518,9 @@ onUnmounted(() => {
                                                 <!-- Badge de prioridad -->
                                                 <span
                                                     class="rounded px-1.5 py-0.2 text-[10px] font-bold uppercase"
-                                                    :class="item.priority === 'alta' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : item.priority === 'media' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                                                    :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
                                                 >
-                                                    {{ item.priority }}
+                                                    {{ item.priority_label || item.priority }}
                                                 </span>
                                                 <span class="font-mono text-[11px] text-[var(--maya-text-muted)]">
                                                     {{ (item.pieces_count || item.shipment?.pieces_count || 1) > 1 ? `${item.pieces_count || item.shipment?.pieces_count} bultos · ` : '' }}{{ item.weight_lb }} lbs ({{ item.package_type }})
@@ -1618,9 +1667,9 @@ onUnmounted(() => {
                                     <span class="font-mono text-[11px]">{{ item.weight_lb }} lbs</span>
                                     <span
                                         class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                                        :class="item.priority === 'alta' ? 'bg-red-100 text-red-700' : item.priority === 'media' ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'"
+                                        :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'"
                                     >
-                                        {{ item.priority }}
+                                        {{ item.priority_label || item.priority }}
                                     </span>
                                 </div>
                             </div>
@@ -1662,7 +1711,7 @@ onUnmounted(() => {
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-xs font-bold text-black dark:text-white">{{ detailTask.title }}</span>
                             <span
-                                v-if="detailTask.status === 'in_progress'"
+                                v-if="isTaskInProgress(detailTask)"
                                 class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
                             >
                                 <span class="relative flex h-2 w-2">
@@ -1672,7 +1721,7 @@ onUnmounted(() => {
                                 En curso &bull; {{ formatElapsedTime(detailTask.start_date_raw || detailTask.start_date) }}
                             </span>
                             <span
-                                v-else-if="detailTask.status === 'completed'"
+                                v-else-if="isTaskCompleted(detailTask)"
                                 class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
                             >
                                 <font-awesome-icon :icon="['fas', 'check']" />
@@ -1739,10 +1788,10 @@ onUnmounted(() => {
                             <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
                                 Paradas de la Ruta ({{ detailTask.items?.length || 0 }})
                             </h4>
-                            <span v-if="detailTask.status === 'pending'" class="text-[11px] text-[var(--maya-text-muted)]">
+                            <span v-if="isTaskPending(detailTask)" class="text-[11px] text-[var(--maya-text-muted)]">
                                 Puedes reordenar paradas respetando la prioridad
                             </span>
-                            <span v-else-if="detailTask.status === 'in_progress'" class="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                            <span v-else-if="isTaskInProgress(detailTask)" class="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                                 Puedes registrar entregas y retornos en tiempo real
                             </span>
                         </div>
@@ -1753,15 +1802,15 @@ onUnmounted(() => {
                                 :key="item.id"
                                 class="flex items-center justify-between rounded-xl border border-[var(--maya-border)] p-3 text-xs transition-colors"
                                 :class="{
-                                    'bg-green-50/30 dark:bg-green-950/10 border-green-200 dark:border-green-900/40': item.status === 'entregado',
-                                    'bg-red-50/30 dark:bg-red-950/10 border-red-200 dark:border-red-900/40': item.status === 'retornado',
-                                    'hover:bg-[var(--maya-hover-surface)]': item.status === 'pendiente'
+                                    'bg-green-50/30 dark:bg-green-950/10 border-green-200 dark:border-green-900/40': isItemDelivered(item),
+                                    'bg-red-50/30 dark:bg-red-950/10 border-red-200 dark:border-red-900/40': isItemReturned(item),
+                                    'hover:bg-[var(--maya-hover-surface)]': isItemPending(item)
                                 }"
                             >
                                 <div class="flex items-start gap-3">
                                     <span
                                         class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-bold text-white text-[11px]"
-                                        :class="item.status === 'entregado' ? 'bg-green-600' : item.status === 'retornado' ? 'bg-red-600' : 'bg-[var(--maya-primary)]'"
+                                        :class="isItemDelivered(item) ? 'bg-green-600' : isItemReturned(item) ? 'bg-red-600' : 'bg-[var(--maya-primary)]'"
                                     >
                                         {{ item.stop_order }}
                                     </span>
@@ -1776,9 +1825,9 @@ onUnmounted(() => {
                                             </span>
                                             <span
                                                 class="rounded px-1.5 py-0.2 text-[10px] font-bold uppercase"
-                                                :class="item.priority === 'alta' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : item.priority === 'media' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                                                :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
                                             >
-                                                {{ item.priority }}
+                                                {{ item.priority_label || item.priority }}
                                             </span>
                                             <span class="font-mono text-[11px] text-[var(--maya-primary)]">
                                                 {{ item.shipment?.tracking_number }}
@@ -1794,14 +1843,14 @@ onUnmounted(() => {
                                         <!-- Estado de parada -->
                                         <div class="mt-1 flex items-center gap-2">
                                             <span
-                                                v-if="item.status === 'entregado'"
+                                                v-if="isItemDelivered(item)"
                                                 class="inline-flex items-center gap-1 font-semibold text-green-700 dark:text-green-400 text-[11px]"
                                             >
                                                 <font-awesome-icon :icon="['fas', 'check']" />
                                                 Entregado {{ item.delivered_at ? `(${item.delivered_at})` : '' }}
                                             </span>
                                             <span
-                                                v-else-if="item.status === 'retornado'"
+                                                v-else-if="isItemReturned(item)"
                                                 class="inline-flex items-center gap-1 font-semibold text-red-700 dark:text-red-400 text-[11px]"
                                             >
                                                 <font-awesome-icon :icon="['fas', 'rotate-left']" />
@@ -1821,7 +1870,7 @@ onUnmounted(() => {
                                 <!-- Acciones por Parada -->
                                 <div class="flex items-center gap-1.5 shrink-0 ml-2">
                                     <!-- Si está en curso y la parada está pendiente -->
-                                    <template v-if="detailTask.status === 'in_progress' && item.status === 'pendiente'">
+                                    <template v-if="isTaskInProgress(detailTask) && isItemPending(item)">
                                         <button
                                             type="button"
                                             class="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 shadow-sm"
@@ -1843,7 +1892,7 @@ onUnmounted(() => {
                                     </template>
 
                                     <!-- Si está pendiente (reordenar y desasignar) -->
-                                    <template v-else-if="detailTask.status === 'pending'">
+                                    <template v-else-if="isTaskPending(detailTask)">
                                         <button
                                             type="button"
                                             class="inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--maya-border)] text-xs disabled:opacity-30"
@@ -1880,7 +1929,7 @@ onUnmounted(() => {
                     <div class="flex items-center justify-between border-t border-[var(--maya-border)] pt-4">
                         <div>
                             <button
-                                v-if="detailTask.status === 'pending'"
+                                v-if="isTaskPending(detailTask)"
                                 type="button"
                                 class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                                 @click="confirmStartTask(detailTask)"
@@ -1889,7 +1938,7 @@ onUnmounted(() => {
                                 Iniciar Ruta Ahora
                             </button>
                             <button
-                                v-else-if="detailTask.status === 'in_progress'"
+                                v-else-if="isTaskInProgress(detailTask)"
                                 type="button"
                                 class="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-green-700"
                                 @click="confirmCompleteTask(detailTask)"
@@ -1901,7 +1950,7 @@ onUnmounted(() => {
 
                         <div class="flex items-center gap-2">
                             <button
-                                v-if="detailTask.status === 'pending'"
+                                v-if="isTaskPending(detailTask)"
                                 type="button"
                                 class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--maya-primary-dark)]"
                                 :disabled="savingReorder"

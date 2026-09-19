@@ -44,6 +44,8 @@ class ShipmentApiTest extends TestCase
             'status' => true,
             'tenant_id' => $this->tenant->id,
         ]);
+
+        $this->seed(\Database\Seeders\CatalogoSeeder::class);
     }
 
     // ============================================================================

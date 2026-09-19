@@ -22,7 +22,12 @@ class VehicleController extends Controller
      */
     public function page(): \Inertia\Response
     {
-        return \Inertia\Inertia::render('Admin/Configuracion/Transportes');
+        $cs = app(\App\Services\CatalogoService::class);
+
+        return \Inertia\Inertia::render('Admin/Configuracion/Transportes', [
+            'ownershipTypes' => $cs->getValoresBySlug('tipo-vehiculo-propiedad'),
+            'vehicleClasses' => $cs->getValoresBySlug('clase-vehiculo'),
+        ]);
     }
 
     /**

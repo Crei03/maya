@@ -35,6 +35,23 @@ class ShipmentTask extends Model
 {
     use HasFactory, HasTenant, SoftDeletes;
 
+    public const STATUS_PENDIENTE = 'PENDIENTE';
+
+    public const STATUS_EN_PROCESO = 'EN_PROCESO';
+
+    public const STATUS_COMPLETADA = 'COMPLETADA';
+
+    public const STATUS_CANCELADA = 'CANCELADA';
+
+    // Alias de retrocompatibilidad
+    public const STATUS_PENDING = self::STATUS_PENDIENTE;
+
+    public const STATUS_IN_PROGRESS = self::STATUS_EN_PROCESO;
+
+    public const STATUS_COMPLETED = self::STATUS_COMPLETADA;
+
+    public const STATUS_CANCELLED = self::STATUS_CANCELADA;
+
     protected $table = 'shipment_tasks';
 
     protected $keyType = 'string';
@@ -52,6 +69,7 @@ class ShipmentTask extends Model
         'end_date',
         'total_hours',
         'status',
+        'status_id',
         'notes',
     ];
 
@@ -77,6 +95,9 @@ class ShipmentTask extends Model
             if (empty($task->id)) {
                 $task->id = (string) Str::uuid();
             }
+            if (empty($task->status_id)) {
+                $task->status_id = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-tarea', 'PENDIENTE');
+            }
         });
     }
 
@@ -89,9 +110,15 @@ class ShipmentTask extends Model
         return $query->where('driver_id', $driverId);
     }
 
-    public function scopeByStatus($query, string $status)
+    public function scopeByStatus($query, $status)
     {
-        return $query->where('status', $status);
+        if (is_numeric($status)) {
+            return $query->where('status_id', (int) $status);
+        }
+
+        return $query->whereHas('status', function ($q) use ($status) {
+            $q->where('codigo', strtoupper((string) $status));
+        });
     }
 
     public function scopeByWarehouse($query, string $warehouseId)
@@ -101,12 +128,19 @@ class ShipmentTask extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['pending', 'in_progress']);
+        return $query->whereHas('status', function ($q) {
+            $q->whereIn('codigo', ['PENDIENTE', 'EN_PROCESO']);
+        });
     }
 
     // ============================================================================
     // Relaciones
     // ============================================================================
+
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'status_id');
+    }
 
     public function tenant(): BelongsTo
     {
@@ -136,7 +170,7 @@ class ShipmentTask extends Model
     public function shipments(): BelongsToMany
     {
         return $this->belongsToMany(Shipment::class, 'shipment_task_items', 'shipment_task_id', 'shipment_id')
-            ->withPivot('status', 'priority', 'stop_order', 'delivered_at', 'return_reason')
+            ->withPivot('status_id', 'priority_id', 'stop_order', 'delivered_at', 'return_reason')
             ->withTimestamps();
     }
 
@@ -176,7 +210,7 @@ class ShipmentTask extends Model
 
     public function deliveredItems(): int
     {
-        return $this->items()->where('status', 'entregado')->count();
+        return $this->items()->whereHas('status', fn ($q) => $q->where('codigo', 'ENTREGADO'))->count();
     }
 
     public function deliveryRate(): float
@@ -188,43 +222,72 @@ class ShipmentTask extends Model
 
     public function markAsInProgress(): void
     {
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-tarea', 'EN_PROCESO');
         $this->update([
-            'status' => 'in_progress',
+            'status_id' => $statusId,
             'start_date' => now(),
         ]);
     }
 
     public function markAsCompleted(): void
     {
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-tarea', 'COMPLETADA');
         $this->update([
-            'status' => 'completed',
+            'status_id' => $statusId,
             'end_date' => now(),
-            'total_hours' => $this->start_date?->diffInMinutes(now()) / 60,
+            'total_hours' => $this->start_date ? round($this->start_date->diffInMinutes(now()) / 60, 2) : 0,
         ]);
     }
 
     public function markAsCancelled(): void
     {
-        $this->update(['status' => 'cancelled']);
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-tarea', 'CANCELADA');
+        $this->update(['status_id' => $statusId]);
     }
 
     public function isPending(): bool
     {
-        return $this->status === 'pending';
+        return $this->status?->codigo === 'PENDIENTE';
     }
 
     public function isInProgress(): bool
     {
-        return $this->status === 'in_progress';
+        return $this->status?->codigo === 'EN_PROCESO';
     }
 
     public function isCompleted(): bool
     {
-        return $this->status === 'completed';
+        return $this->status?->codigo === 'COMPLETADA';
     }
 
     public function isCancelled(): bool
     {
-        return $this->status === 'cancelled';
+        return $this->status?->codigo === 'CANCELADA';
+    }
+
+    public function getStatusCodeAttribute(): string
+    {
+        return $this->status?->codigo ?? '';
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return $this->status?->valor ?? '';
+    }
+
+    public function setStatusAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['status_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $codeMap = [
+                'pending' => 'PENDIENTE',
+                'in_progress' => 'EN_PROCESO',
+                'completed' => 'COMPLETADA',
+                'cancelled' => 'CANCELADA',
+            ];
+            $code = $codeMap[strtolower($value)] ?? strtoupper($value);
+            $this->attributes['status_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-tarea', $code);
+        }
     }
 }

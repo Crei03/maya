@@ -18,6 +18,7 @@ class UpdateCatalogoValorRequest extends FormRequest
         return [
             'valor' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
+            'metadata' => ['nullable', 'array'],
             'parent_id' => ['nullable', 'integer', 'exists:catalogo_valores,id'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['boolean'],

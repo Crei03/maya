@@ -48,6 +48,8 @@ class ShipmentTaskWizardTest extends TestCase
         );
         $this->tenant->makeCurrent();
 
+        $this->seed(\Database\Seeders\CatalogoSeeder::class);
+
         $this->gestor = User::factory()->create([
             'role' => User::ROLE_GESTOR,
             'status' => true,
@@ -139,22 +141,25 @@ class ShipmentTaskWizardTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.status', ShipmentTask::STATUS_PENDIENTE)
             ->assertJsonPath('data.total_items', 2);
+
+        $cs = app(\App\Services\CatalogoService::class);
+        $pendingTaskId = $cs->getValorIdByCodigo('estado-tarea', 'PENDIENTE');
 
         $this->assertDatabaseHas('shipment_tasks', [
             'driver_id' => $this->driver->id,
             'origin_warehouse_id' => $this->warehouse->id,
-            'status' => 'pending',
+            'status_id' => $pendingTaskId,
         ]);
 
         $this->assertDatabaseCount('shipment_task_items', 2);
         $this->assertDatabaseHas('shipment_task_items', [
-            'priority' => 'alta',
+            'priority_id' => $cs->getValorIdByCodigo('prioridad-tarea', 'ALTA'),
             'stop_order' => 1,
         ]);
         $this->assertDatabaseHas('shipment_task_items', [
-            'priority' => 'media',
+            'priority_id' => $cs->getValorIdByCodigo('prioridad-tarea', 'MEDIA'),
             'stop_order' => 2,
         ]);
 
@@ -418,9 +423,9 @@ class ShipmentTaskWizardTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', 'in_progress');
+            ->assertJsonPath('data.status', ShipmentTask::STATUS_IN_PROGRESS);
 
-        $this->assertEquals('in_progress', $task->fresh()->status);
+        $this->assertEquals(ShipmentTask::STATUS_IN_PROGRESS, $task->fresh()->status);
         $this->assertEquals(Shipment::STATUS_IN_TRANSIT, $shipment->fresh()->status);
         $this->assertDatabaseHas('tracking_events', [
             'shipment_id' => $shipment->id,
@@ -570,9 +575,9 @@ class ShipmentTaskWizardTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', 'completed');
+            ->assertJsonPath('data.status', ShipmentTask::STATUS_COMPLETED);
 
-        $this->assertEquals('completed', $task->fresh()->status);
+        $this->assertEquals(ShipmentTask::STATUS_COMPLETED, $task->fresh()->status);
         $this->assertNotNull($task->fresh()->total_hours);
         $this->assertEquals(Shipment::STATUS_DELIVERED, $shipmentDelivered->fresh()->status);
         $this->assertEquals(Shipment::STATUS_IN_WAREHOUSE, $shipmentPending->fresh()->status);
@@ -617,9 +622,9 @@ class ShipmentTaskWizardTest extends TestCase
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.status', 'cancelled');
+            ->assertJsonPath('data.status', ShipmentTask::STATUS_CANCELLED);
 
-        $this->assertEquals('cancelled', $task->fresh()->status);
+        $this->assertEquals(ShipmentTask::STATUS_CANCELLED, $task->fresh()->status);
         $this->assertEquals(Shipment::STATUS_IN_WAREHOUSE, $shipment->fresh()->status);
     }
 

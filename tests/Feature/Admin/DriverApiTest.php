@@ -23,6 +23,8 @@ class DriverApiTest extends TestCase
             'role' => User::ROLE_GESTOR,
             'status' => true,
         ]);
+
+        $this->seed(\Database\Seeders\CatalogoSeeder::class);
     }
 
     // ============================================================================

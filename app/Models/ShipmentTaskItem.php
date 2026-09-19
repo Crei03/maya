@@ -29,23 +29,26 @@ class ShipmentTaskItem extends Model
 {
     use HasFactory, HasTenant;
 
-    public const PRIORITY_ALTA = 'alta';
+    public const PRIORITY_ALTA = 'ALTA';
 
-    public const PRIORITY_MEDIA = 'media';
+    public const PRIORITY_MEDIA = 'MEDIA';
 
-    public const PRIORITY_BAJA = 'baja';
+    public const PRIORITY_BAJA = 'BAJA';
 
     public const PRIORITIES = [
         self::PRIORITY_ALTA,
         self::PRIORITY_MEDIA,
         self::PRIORITY_BAJA,
+        'alta',
+        'media',
+        'baja',
     ];
 
-    public const STATUS_PENDIENTE = 'pendiente';
+    public const STATUS_PENDIENTE = 'PENDIENTE';
 
-    public const STATUS_ENTREGADO = 'entregado';
+    public const STATUS_ENTREGADO = 'ENTREGADO';
 
-    public const STATUS_RETORNADO = 'retornado';
+    public const STATUS_RETORNADO = 'RETORNADO';
 
     protected $table = 'shipment_task_items';
 
@@ -59,7 +62,9 @@ class ShipmentTaskItem extends Model
         'shipment_task_id',
         'shipment_id',
         'status',
+        'status_id',
         'priority',
+        'priority_id',
         'stop_order',
         'delivered_at',
         'return_reason',
@@ -83,6 +88,12 @@ class ShipmentTaskItem extends Model
             if (empty($item->id)) {
                 $item->id = (string) Str::uuid();
             }
+            if (empty($item->status_id)) {
+                $item->status_id = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-item-tarea', 'PENDIENTE');
+            }
+            if (empty($item->priority_id)) {
+                $item->priority_id = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('prioridad-tarea', 'MEDIA');
+            }
         });
     }
 
@@ -97,22 +108,38 @@ class ShipmentTaskItem extends Model
 
     public function scopeDelivered($query)
     {
-        return $query->where('status', 'entregado');
+        return $query->whereHas('status', function ($q) {
+            $q->where('codigo', 'ENTREGADO');
+        });
     }
 
     public function scopePending($query)
     {
-        return $query->where('status', 'pendiente');
+        return $query->whereHas('status', function ($q) {
+            $q->where('codigo', 'PENDIENTE');
+        });
     }
 
     public function scopeReturned($query)
     {
-        return $query->where('status', 'retornado');
+        return $query->whereHas('status', function ($q) {
+            $q->where('codigo', 'RETORNADO');
+        });
     }
 
     // ============================================================================
     // Relaciones
     // ============================================================================
+
+    public function status(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'status_id');
+    }
+
+    public function priority(): BelongsTo
+    {
+        return $this->belongsTo(CatalogoValor::class, 'priority_id');
+    }
 
     public function task(): BelongsTo
     {
@@ -130,24 +157,27 @@ class ShipmentTaskItem extends Model
 
     public function markAsDelivered(): void
     {
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-item-tarea', 'ENTREGADO');
         $this->update([
-            'status' => 'entregado',
+            'status_id' => $statusId,
             'delivered_at' => now(),
         ]);
     }
 
     public function markAsReturned(string $reason = ''): void
     {
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-item-tarea', 'RETORNADO');
         $this->update([
-            'status' => 'retornado',
+            'status_id' => $statusId,
             'return_reason' => $reason ?: $this->return_reason,
         ]);
     }
 
     public function markAsPending(): void
     {
+        $statusId = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-item-tarea', 'PENDIENTE');
         $this->update([
-            'status' => 'pendiente',
+            'status_id' => $statusId,
             'delivered_at' => null,
             'return_reason' => null,
         ]);
@@ -155,16 +185,66 @@ class ShipmentTaskItem extends Model
 
     public function isDelivered(): bool
     {
-        return $this->status === 'entregado';
+        return $this->status?->codigo === 'ENTREGADO';
     }
 
     public function isPending(): bool
     {
-        return $this->status === 'pendiente';
+        return $this->status?->codigo === 'PENDIENTE';
     }
 
     public function isReturned(): bool
     {
-        return $this->status === 'retornado';
+        return $this->status?->codigo === 'RETORNADO';
+    }
+
+    public function getStatusCodeAttribute(): string
+    {
+        return $this->status?->codigo ?? '';
+    }
+
+    public function getStatusLabelAttribute(): string
+    {
+        return $this->status?->valor ?? '';
+    }
+
+    public function getPriorityCodeAttribute(): string
+    {
+        return $this->priority?->codigo ?? '';
+    }
+
+    public function getPriorityLabelAttribute(): string
+    {
+        return $this->priority?->valor ?? '';
+    }
+
+    public function setStatusAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['status_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $codeMap = [
+                'pendiente' => 'PENDIENTE',
+                'entregado' => 'ENTREGADO',
+                'retornado' => 'RETORNADO',
+            ];
+            $code = $codeMap[strtolower($value)] ?? strtoupper($value);
+            $this->attributes['status_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('estado-item-tarea', $code);
+        }
+    }
+
+    public function setPriorityAttribute($value): void
+    {
+        if (is_numeric($value)) {
+            $this->attributes['priority_id'] = (int) $value;
+        } elseif (is_string($value)) {
+            $codeMap = [
+                'alta' => 'ALTA',
+                'media' => 'MEDIA',
+                'baja' => 'BAJA',
+            ];
+            $code = $codeMap[strtolower($value)] ?? strtoupper($value);
+            $this->attributes['priority_id'] = app(\App\Services\CatalogoService::class)->getValorIdByCodigo('prioridad-tarea', $code);
+        }
     }
 }

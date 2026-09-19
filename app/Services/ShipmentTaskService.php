@@ -35,7 +35,14 @@ class ShipmentTaskService
         $query = ShipmentTask::query();
 
         if (! empty($filters['status'] ?? null)) {
-            $query->where('status', $filters['status']);
+            $statusVal = (string) $filters['status'];
+            if (is_numeric($statusVal)) {
+                $query->where('status_id', (int) $statusVal);
+            } else {
+                $query->whereHas('status', function (Builder $q) use ($statusVal): void {
+                    $q->where('codigo', strtoupper($statusVal));
+                });
+            }
         }
 
         if (! empty($filters['driver_id'] ?? null)) {
@@ -66,10 +73,14 @@ class ShipmentTaskService
         }
 
         $paginator = $query->with([
+            'status',
             'driver:id,name,email',
             'vehicle:id,license_plate,brand,model,capacity_kg',
             'warehouse:id,name',
-            'items.shipment:id,tracking_number,weight_lb,weight_kg,status',
+            'items.status',
+            'items.priority',
+            'items.shipment.status',
+            'items.shipment:id,tracking_number,weight_lb,weight_kg,status_id',
         ])
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
@@ -101,10 +112,16 @@ class ShipmentTaskService
         }
 
         $task->load([
+            'status',
             'driver.driverProfile',
             'vehicle',
             'warehouse',
             'items' => fn ($q) => $q->orderBy('stop_order')->orderBy('created_at'),
+            'items.status',
+            'items.priority',
+            'items.shipment.status',
+            'items.shipment.referenceType',
+            'items.shipment.packageType',
             'items.shipment.sender',
             'items.shipment.warehouse',
         ]);
@@ -121,6 +138,7 @@ class ShipmentTaskService
     {
         return DB::transaction(function () use ($data, $tenantId): ShipmentTask {
             $tenantId = $tenantId ?? auth()->user()?->tenant_id;
+            $cs = app(\App\Services\CatalogoService::class);
             $code = $data['title'] ?? ShipmentTask::generateTaskCode($tenantId);
 
             $task = new ShipmentTask;
@@ -130,7 +148,7 @@ class ShipmentTaskService
             $task->vehicle_id = $data['vehicle_id'] ?? null;
             $task->origin_warehouse_id = $data['origin_warehouse_id'];
             $task->start_date = $data['start_date'];
-            $task->status = 'pending';
+            $task->status_id = $cs->getValorIdByCodigo('estado-tarea', 'PENDIENTE');
             $task->notes = $data['notes'] ?? null;
             $task->save();
 
@@ -138,8 +156,15 @@ class ShipmentTaskService
             $items = $data['items'] ?? [];
             usort($items, fn ($a, $b) => ($a['stop_order'] ?? 0) <=> ($b['stop_order'] ?? 0));
 
+            $assignedStatusId = $cs->getValorIdByCodigo('estado-envio', 'ASIGNADO');
+            $itemPendingStatusId = $cs->getValorIdByCodigo('estado-item-tarea', 'PENDIENTE');
+
             foreach ($items as $index => $itemData) {
-                $priority = $itemData['priority'] ?? ShipmentTaskItem::PRIORITY_MEDIA;
+                $priority = $itemData['priority'] ?? 'media';
+                $priorityId = ! empty($itemData['priority_id'])
+                    ? (int) $itemData['priority_id']
+                    : ($cs->getValorIdByCodigo('prioridad-tarea', strtoupper((string) $priority))
+                        ?? $cs->getValorIdByCodigo('prioridad-tarea', 'MEDIA'));
                 $stopOrder = (int) ($itemData['stop_order'] ?? ($index + 1));
 
                 $shipmentId = null;
@@ -149,7 +174,7 @@ class ShipmentTaskService
                     $newShipment['tenant_id'] = $tenantId;
                     $newShipment['warehouse_id'] = $task->origin_warehouse_id;
                     $newShipment['driver_task'] = $task->id;
-                    $newShipment['status'] = Shipment::STATUS_ASSIGNED;
+                    $newShipment['status_id'] = $assignedStatusId;
 
                     if (empty($newShipment['tracking_number'])) {
                         $newShipment['tracking_number'] = Shipment::generateTrackingNumber();
@@ -165,13 +190,13 @@ class ShipmentTaskService
                         }
                     }
 
-                    $shipment = Shipment::create($newShipment);
+                    $shipment = app(\App\Services\ShipmentService::class)->create($newShipment);
                     $shipmentId = $shipment->id;
                 } elseif (! empty($itemData['shipment_id'] ?? null)) {
                     $shipment = Shipment::findOrFail($itemData['shipment_id']);
                     $shipment->update([
                         'driver_task' => $task->id,
-                        'status' => Shipment::STATUS_ASSIGNED,
+                        'status_id' => $assignedStatusId,
                     ]);
                     $shipmentId = $shipment->id;
                 }
@@ -181,18 +206,18 @@ class ShipmentTaskService
                     $item->tenant_id = $tenantId;
                     $item->shipment_task_id = $task->id;
                     $item->shipment_id = $shipmentId;
-                    $item->priority = $priority;
+                    $item->priority_id = $priorityId;
                     $item->stop_order = $stopOrder;
-                    $item->status = ShipmentTaskItem::STATUS_PENDIENTE;
+                    $item->status_id = $itemPendingStatusId;
                     $item->save();
 
                     // Registrar evento de tracking
                     TrackingEvent::create([
                         'tenant_id' => $tenantId,
                         'shipment_id' => $shipmentId,
-                        'status_id' => null,
+                        'status_id' => $assignedStatusId,
                         'location_name' => $task->warehouse?->name ?? 'Bodega de salida',
-                        'description' => "Asignado al plan de entrega {$task->title} con prioridad ".strtoupper($priority),
+                        'description' => "Asignado al plan de entrega {$task->title}",
                         'created_by' => auth()->id() ? (string) auth()->id() : null,
                         'timestamp' => now(),
                     ]);
@@ -222,13 +247,23 @@ class ShipmentTaskService
         return DB::transaction(function () use ($taskId, $items): ShipmentTask {
             $task = ShipmentTask::findOrFail($taskId);
 
+            $cs = app(\App\Services\CatalogoService::class);
+
             foreach ($items as $itemData) {
+                $updateData = ['stop_order' => $itemData['stop_order']];
+
+                if (! empty($itemData['priority_id'])) {
+                    $updateData['priority_id'] = (int) $itemData['priority_id'];
+                } elseif (! empty($itemData['priority'])) {
+                    $priorityId = $cs->getValorIdByCodigo('prioridad-tarea', strtoupper((string) $itemData['priority']));
+                    if ($priorityId) {
+                        $updateData['priority_id'] = $priorityId;
+                    }
+                }
+
                 ShipmentTaskItem::where('id', $itemData['id'])
                     ->where('shipment_task_id', $taskId)
-                    ->update([
-                        'stop_order' => $itemData['stop_order'],
-                        'priority' => $itemData['priority'],
-                    ]);
+                    ->update($updateData);
             }
 
             return $task->load('items.shipment.sender');
@@ -243,17 +278,21 @@ class ShipmentTaskService
      */
     public function startTask(string $taskId): ShipmentTask
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
-        if ($task->status !== 'pending') {
+        if ($task->status?->codigo !== 'PENDIENTE') {
             throw ValidationException::withMessages([
                 'status' => 'Solo se pueden iniciar tareas en estado pendiente.',
             ]);
         }
 
+        $cs = app(\App\Services\CatalogoService::class);
+        $inProgressStatusId = $cs->getValorIdByCodigo('estado-tarea', 'EN_PROCESO');
+        $inTransitShipmentStatusId = $cs->getValorIdByCodigo('estado-envio', 'EN_TRANSITO');
+
         // Regla: un conductor no puede tener 2 tareas in_progress simultáneas
         $hasActiveTask = ShipmentTask::where('driver_id', $task->driver_id)
-            ->where('status', 'in_progress')
+            ->where('status_id', $inProgressStatusId)
             ->where('id', '!=', $taskId)
             ->exists();
 
@@ -263,23 +302,23 @@ class ShipmentTaskService
             ]);
         }
 
-        return DB::transaction(function () use ($task): ShipmentTask {
-            $task->status = 'in_progress';
+        return DB::transaction(function () use ($task, $inProgressStatusId, $inTransitShipmentStatusId): ShipmentTask {
+            $task->status_id = $inProgressStatusId;
             $task->start_date = now();
             $task->save();
 
-            $task->load(['items.shipment', 'driver', 'warehouse']);
+            $task->load(['status', 'items.shipment', 'driver', 'warehouse']);
 
             foreach ($task->items as $item) {
                 if ($item->shipment) {
                     $item->shipment->update([
-                        'status' => Shipment::STATUS_IN_TRANSIT,
+                        'status_id' => $inTransitShipmentStatusId,
                     ]);
 
                     TrackingEvent::create([
                         'tenant_id' => $task->tenant_id,
                         'shipment_id' => $item->shipment->id,
-                        'status_id' => null,
+                        'status_id' => $inTransitShipmentStatusId,
                         'location_name' => $task->warehouse?->name ?? 'En ruta',
                         'description' => "En ruta de entrega con el conductor {$task->driver?->name} (Plan: {$task->title})",
                         'created_by' => auth()->id() ? (string) auth()->id() : null,
@@ -300,30 +339,36 @@ class ShipmentTaskService
      */
     public function completeTask(string $taskId): ShipmentTask
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
-        if ($task->status !== 'in_progress') {
+        if ($task->status?->codigo !== 'EN_PROCESO') {
             throw ValidationException::withMessages([
                 'status' => 'Solo se pueden finalizar tareas en progreso.',
             ]);
         }
 
-        return DB::transaction(function () use ($task): ShipmentTask {
+        $cs = app(\App\Services\CatalogoService::class);
+        $completedTaskId = $cs->getValorIdByCodigo('estado-tarea', 'COMPLETADA');
+        $retornadoItemId = $cs->getValorIdByCodigo('estado-item-tarea', 'RETORNADO');
+        $entregadoItemId = $cs->getValorIdByCodigo('estado-item-tarea', 'ENTREGADO');
+        $enBodegaShipmentId = $cs->getValorIdByCodigo('estado-envio', 'EN_BODEGA');
+
+        return DB::transaction(function () use ($task, $completedTaskId, $retornadoItemId, $entregadoItemId, $enBodegaShipmentId): ShipmentTask {
             $endDate = now();
             $startDate = $task->start_date ?? $endDate;
             $diffMinutes = $startDate->diffInMinutes($endDate);
             $totalHours = round($diffMinutes / 60, 2);
 
-            $task->status = 'completed';
+            $task->status_id = $completedTaskId;
             $task->end_date = $endDate;
             $task->total_hours = $totalHours;
             $task->save();
 
-            $task->load(['items.shipment', 'warehouse']);
+            $task->load(['status', 'items.shipment', 'warehouse']);
 
             foreach ($task->items as $item) {
-                if ($item->status !== ShipmentTaskItem::STATUS_ENTREGADO) {
-                    $item->status = ShipmentTaskItem::STATUS_RETORNADO;
+                if ($item->status_id !== $entregadoItemId) {
+                    $item->status_id = $retornadoItemId;
                     if (empty($item->return_reason)) {
                         $item->return_reason = 'Ruta finalizada sin completar visita';
                     }
@@ -331,14 +376,14 @@ class ShipmentTaskService
 
                     if ($item->shipment) {
                         $item->shipment->update([
-                            'status' => Shipment::STATUS_IN_WAREHOUSE,
+                            'status_id' => $enBodegaShipmentId,
                             'warehouse_id' => $task->origin_warehouse_id,
                         ]);
 
                         TrackingEvent::create([
                             'tenant_id' => $task->tenant_id,
                             'shipment_id' => $item->shipment->id,
-                            'status_id' => null,
+                            'status_id' => $enBodegaShipmentId,
                             'location_name' => $task->warehouse?->name ?? 'Bodega de origen',
                             'description' => "Reingresado a bodega tras finalización de ruta ({$task->title}). Motivo: {$item->return_reason}",
                             'created_by' => auth()->id() ? (string) auth()->id() : null,
@@ -360,31 +405,37 @@ class ShipmentTaskService
      */
     public function cancelTask(string $taskId, ?string $reason = null): ShipmentTask
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
-        if ($task->status === 'completed') {
+        if ($task->status?->codigo === 'COMPLETADA') {
             throw ValidationException::withMessages([
                 'status' => 'No se puede cancelar una tarea que ya ha sido completada.',
             ]);
         }
 
-        return DB::transaction(function () use ($task, $reason): ShipmentTask {
-            $task->status = 'cancelled';
+        $cs = app(\App\Services\CatalogoService::class);
+        $cancelledTaskId = $cs->getValorIdByCodigo('estado-tarea', 'CANCELADA');
+        $retornadoItemId = $cs->getValorIdByCodigo('estado-item-tarea', 'RETORNADO');
+        $entregadoItemId = $cs->getValorIdByCodigo('estado-item-tarea', 'ENTREGADO');
+        $enBodegaShipmentId = $cs->getValorIdByCodigo('estado-envio', 'EN_BODEGA');
+
+        return DB::transaction(function () use ($task, $reason, $cancelledTaskId, $retornadoItemId, $entregadoItemId, $enBodegaShipmentId): ShipmentTask {
+            $task->status_id = $cancelledTaskId;
             $cancelNote = 'Cancelado: '.($reason ?? 'Cancelado por el gestor');
             $task->notes = $task->notes ? "{$task->notes} | {$cancelNote}" : $cancelNote;
             $task->save();
 
-            $task->load(['items.shipment', 'warehouse']);
+            $task->load(['status', 'items.shipment', 'warehouse']);
 
             foreach ($task->items as $item) {
-                if ($item->status !== ShipmentTaskItem::STATUS_ENTREGADO) {
-                    $item->status = ShipmentTaskItem::STATUS_RETORNADO;
+                if ($item->status_id !== $entregadoItemId) {
+                    $item->status_id = $retornadoItemId;
                     $item->return_reason = $reason ?? 'Plan de entrega cancelado';
                     $item->save();
 
                     if ($item->shipment) {
                         $item->shipment->update([
-                            'status' => Shipment::STATUS_IN_WAREHOUSE,
+                            'status_id' => $enBodegaShipmentId,
                             'driver_task' => null,
                             'warehouse_id' => $task->origin_warehouse_id,
                         ]);
@@ -392,7 +443,7 @@ class ShipmentTaskService
                         TrackingEvent::create([
                             'tenant_id' => $task->tenant_id,
                             'shipment_id' => $item->shipment->id,
-                            'status_id' => null,
+                            'status_id' => $enBodegaShipmentId,
                             'location_name' => $task->warehouse?->name ?? 'Bodega de origen',
                             'description' => "Plan cancelado ({$task->title}). Reingresado a inventario de bodega.",
                             'created_by' => auth()->id() ? (string) auth()->id() : null,
@@ -412,71 +463,93 @@ class ShipmentTaskService
      * @throws ModelNotFoundException
      * @throws ValidationException
      */
-    public function updateItemStatus(string $taskId, string $itemId, string $status, ?string $returnReason = null): ShipmentTaskItem
+    public function updateItemStatus(string $taskId, string $itemId, string|int $status, ?string $returnReason = null): ShipmentTaskItem
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
         $item = ShipmentTaskItem::where('id', $itemId)
             ->where('shipment_task_id', $taskId)
             ->firstOrFail();
 
-        return DB::transaction(function () use ($task, $item, $status, $returnReason): ShipmentTaskItem {
-            if ($status === ShipmentTaskItem::STATUS_ENTREGADO) {
-                $item->status = ShipmentTaskItem::STATUS_ENTREGADO;
+        $cs = app(\App\Services\CatalogoService::class);
+        $statusId = is_numeric($status) ? (int) $status : $cs->getValorIdByCodigo('estado-item-tarea', strtoupper((string) $status));
+        if (! $statusId) {
+            $codeMap = [
+                'pendiente' => 'PENDIENTE',
+                'entregado' => 'ENTREGADO',
+                'retornado' => 'RETORNADO',
+                'in_progress' => 'PENDIENTE',
+            ];
+            $code = $codeMap[strtolower((string) $status)] ?? strtoupper((string) $status);
+            $statusId = $cs->getValorIdByCodigo('estado-item-tarea', $code);
+        }
+
+        $entregadoStatusId = $cs->getValorIdByCodigo('estado-item-tarea', 'ENTREGADO');
+        $retornadoStatusId = $cs->getValorIdByCodigo('estado-item-tarea', 'RETORNADO');
+        $pendienteStatusId = $cs->getValorIdByCodigo('estado-item-tarea', 'PENDIENTE');
+
+        $deliveredShipmentId = $cs->getValorIdByCodigo('estado-envio', 'ENTREGADO');
+        $returnedShipmentId = $cs->getValorIdByCodigo('estado-envio', 'DEVUELTO');
+        $inTransitShipmentId = $cs->getValorIdByCodigo('estado-envio', 'EN_TRANSITO');
+        $assignedShipmentId = $cs->getValorIdByCodigo('estado-envio', 'ASIGNADO');
+
+        return DB::transaction(function () use ($task, $item, $statusId, $entregadoStatusId, $retornadoStatusId, $pendienteStatusId, $deliveredShipmentId, $returnedShipmentId, $inTransitShipmentId, $assignedShipmentId, $returnReason): ShipmentTaskItem {
+            if ($statusId === $entregadoStatusId) {
+                $item->status_id = $entregadoStatusId;
                 $item->delivered_at = now();
                 $item->return_reason = null;
                 $item->save();
 
                 if ($item->shipment) {
                     $item->shipment->update([
-                        'status' => Shipment::STATUS_DELIVERED,
+                        'status_id' => $deliveredShipmentId,
                         'delivered_at' => now(),
                     ]);
 
                     TrackingEvent::create([
                         'tenant_id' => $task->tenant_id,
                         'shipment_id' => $item->shipment->id,
-                        'status_id' => null,
+                        'status_id' => $deliveredShipmentId,
                         'location_name' => 'Destino de entrega',
                         'description' => "Entregado exitosamente en parada #{$item->stop_order}",
                         'created_by' => auth()->id() ? (string) auth()->id() : null,
                         'timestamp' => now(),
                     ]);
                 }
-            } elseif ($status === ShipmentTaskItem::STATUS_RETORNADO) {
-                $item->status = ShipmentTaskItem::STATUS_RETORNADO;
+            } elseif ($statusId === $retornadoStatusId) {
+                $item->status_id = $retornadoStatusId;
                 $item->delivered_at = null;
                 $item->return_reason = $returnReason ?? 'No entregado';
                 $item->save();
 
                 if ($item->shipment) {
                     $item->shipment->update([
-                        'status' => Shipment::STATUS_RETURNED,
+                        'status_id' => $returnedShipmentId,
                     ]);
 
                     TrackingEvent::create([
                         'tenant_id' => $task->tenant_id,
                         'shipment_id' => $item->shipment->id,
-                        'status_id' => null,
+                        'status_id' => $returnedShipmentId,
                         'location_name' => 'En ruta',
                         'description' => "Intento de entrega no exitoso en parada #{$item->stop_order}. Motivo: {$item->return_reason}",
                         'created_by' => auth()->id() ? (string) auth()->id() : null,
                         'timestamp' => now(),
                     ]);
                 }
-            } elseif ($status === ShipmentTaskItem::STATUS_PENDIENTE) {
-                $item->status = ShipmentTaskItem::STATUS_PENDIENTE;
+            } elseif ($statusId === $pendienteStatusId) {
+                $item->status_id = $pendienteStatusId;
                 $item->delivered_at = null;
                 $item->return_reason = null;
                 $item->save();
 
                 if ($item->shipment) {
-                    $newShipmentStatus = $task->status === 'in_progress' ? Shipment::STATUS_IN_TRANSIT : Shipment::STATUS_ASSIGNED;
-                    $item->shipment->update(['status' => $newShipmentStatus]);
+                    $newShipmentStatusId = $task->status?->codigo === 'EN_PROCESO' ? $inTransitShipmentId : $assignedShipmentId;
+                    $item->shipment->update(['status_id' => $newShipmentStatusId]);
                 }
             }
 
-            return $item->fresh(['shipment.sender']);
+            return $item->fresh(['shipment.sender', 'status', 'priority']);
         });
     }
 
@@ -488,17 +561,26 @@ class ShipmentTaskService
      * @throws ModelNotFoundException
      * @throws ValidationException
      */
-    public function assignShipments(string $taskId, array $shipmentIds, string $priority = 'media'): ShipmentTask
+    public function assignShipments(string $taskId, array $shipmentIds, string|int $priority = 'media'): ShipmentTask
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
-        if ($task->status !== 'pending') {
+        if ($task->status?->codigo !== 'PENDIENTE') {
             throw ValidationException::withMessages([
                 'status' => 'Solo se pueden asignar paquetes a planes en estado pendiente.',
             ]);
         }
 
-        return DB::transaction(function () use ($task, $shipmentIds, $priority): ShipmentTask {
+        $cs = app(\App\Services\CatalogoService::class);
+        $assignedStatusId = $cs->getValorIdByCodigo('estado-envio', 'ASIGNADO');
+        $itemPendingStatusId = $cs->getValorIdByCodigo('estado-item-tarea', 'PENDIENTE');
+
+        $priorityId = is_numeric($priority)
+            ? (int) $priority
+            : ($cs->getValorIdByCodigo('prioridad-tarea', strtoupper((string) $priority))
+                ?? $cs->getValorIdByCodigo('prioridad-tarea', 'MEDIA'));
+
+        return DB::transaction(function () use ($task, $shipmentIds, $priorityId, $assignedStatusId, $itemPendingStatusId): ShipmentTask {
             $maxOrder = (int) $task->items()->max('stop_order') ?: 0;
 
             foreach ($shipmentIds as $shipmentId) {
@@ -509,7 +591,7 @@ class ShipmentTaskService
                 $shipment = Shipment::findOrFail($shipmentId);
                 $shipment->update([
                     'driver_task' => $task->id,
-                    'status' => Shipment::STATUS_ASSIGNED,
+                    'status_id' => $assignedStatusId,
                 ]);
 
                 $maxOrder++;
@@ -517,15 +599,15 @@ class ShipmentTaskService
                 $item->tenant_id = $task->tenant_id;
                 $item->shipment_task_id = $task->id;
                 $item->shipment_id = $shipmentId;
-                $item->priority = $priority;
+                $item->priority_id = $priorityId;
                 $item->stop_order = $maxOrder;
-                $item->status = ShipmentTaskItem::STATUS_PENDIENTE;
+                $item->status_id = $itemPendingStatusId;
                 $item->save();
 
                 TrackingEvent::create([
                     'tenant_id' => $task->tenant_id,
                     'shipment_id' => $shipmentId,
-                    'status_id' => null,
+                    'status_id' => $assignedStatusId,
                     'location_name' => $task->warehouse?->name ?? 'Bodega',
                     'description' => "Asignado al plan de entrega {$task->title}",
                     'created_by' => auth()->id() ? (string) auth()->id() : null,
@@ -545,15 +627,18 @@ class ShipmentTaskService
      */
     public function unassignShipment(string $taskId, string $shipmentId): ShipmentTask
     {
-        $task = ShipmentTask::findOrFail($taskId);
+        $task = ShipmentTask::with('status')->findOrFail($taskId);
 
-        if ($task->status !== 'pending') {
+        if ($task->status?->codigo !== 'PENDIENTE') {
             throw ValidationException::withMessages([
                 'status' => 'Solo se pueden desasignar paquetes de planes en estado pendiente.',
             ]);
         }
 
-        return DB::transaction(function () use ($task, $shipmentId): ShipmentTask {
+        $cs = app(\App\Services\CatalogoService::class);
+        $inWarehouseStatusId = $cs->getValorIdByCodigo('estado-envio', 'EN_BODEGA');
+
+        return DB::transaction(function () use ($task, $shipmentId, $inWarehouseStatusId): ShipmentTask {
             $item = $task->items()->where('shipment_id', $shipmentId)->first();
             if ($item) {
                 $item->delete();
@@ -563,13 +648,13 @@ class ShipmentTaskService
             if ($shipment) {
                 $shipment->update([
                     'driver_task' => null,
-                    'status' => Shipment::STATUS_IN_WAREHOUSE,
+                    'status_id' => $inWarehouseStatusId,
                 ]);
 
                 TrackingEvent::create([
                     'tenant_id' => $task->tenant_id,
                     'shipment_id' => $shipmentId,
-                    'status_id' => null,
+                    'status_id' => $inWarehouseStatusId,
                     'location_name' => $task->warehouse?->name ?? 'Bodega',
                     'description' => "Desasignado del plan {$task->title}. Reingresado a inventario.",
                     'created_by' => auth()->id() ? (string) auth()->id() : null,
@@ -604,10 +689,17 @@ class ShipmentTaskService
         $pendingCount = 0;
 
         foreach ($items as $item) {
-            $priorityCounts[$item->priority] = ($priorityCounts[$item->priority] ?? 0) + 1;
-            if ($item->status === ShipmentTaskItem::STATUS_ENTREGADO) {
+            $priorityKey = strtolower($item->priority?->codigo ?? 'media');
+            if (isset($priorityCounts[$priorityKey])) {
+                $priorityCounts[$priorityKey]++;
+            } else {
+                $priorityCounts[$priorityKey] = 1;
+            }
+
+            $itemCode = $item->status?->codigo;
+            if ($itemCode === 'ENTREGADO') {
                 $deliveredCount++;
-            } elseif ($item->status === ShipmentTaskItem::STATUS_RETORNADO) {
+            } elseif ($itemCode === 'RETORNADO') {
                 $returnedCount++;
             } else {
                 $pendingCount++;
@@ -621,6 +713,10 @@ class ShipmentTaskService
 
         $totalItems = $items->count();
         $progressPercent = $totalItems > 0 ? (int) round(($deliveredCount / $totalItems) * 100) : 0;
+
+        $statusCode = $task->status?->codigo ?? 'PENDIENTE';
+        $statusLabel = $task->status?->valor ?? 'Pendiente';
+        $statusMetadata = $task->status?->metadata ?? [];
 
         $data = [
             'id' => $task->id,
@@ -637,7 +733,11 @@ class ShipmentTaskService
             'start_date_raw' => $task->start_date ? $task->start_date->toIso8601String() : null,
             'end_date' => $task->end_date ? $task->end_date->format('Y-m-d H:i') : null,
             'total_hours' => $task->total_hours !== null ? (float) $task->total_hours : null,
-            'status' => $task->status,
+            'status_id' => $task->status_id,
+            'status' => $statusCode,
+            'status_code' => $statusCode,
+            'status_label' => $statusLabel,
+            'status_metadata' => $statusMetadata,
             'notes' => $task->notes,
             'total_items' => $totalItems,
             'packages_count' => $totalItems,
@@ -658,22 +758,38 @@ class ShipmentTaskService
                 return [
                     'id' => $item->id,
                     'stop_order' => $item->stop_order,
-                    'priority' => $item->priority,
-                    'status' => $item->status,
+                    'priority_id' => $item->priority_id,
+                    'priority' => $item->priority?->codigo ? strtolower($item->priority->codigo) : 'media',
+                    'priority_code' => $item->priority?->codigo ?? 'MEDIA',
+                    'priority_label' => $item->priority?->valor ?? 'Media',
+                    'priority_metadata' => $item->priority?->metadata ?? [],
+                    'status_id' => $item->status_id,
+                    'status' => $item->status?->codigo ?? 'PENDIENTE',
+                    'status_code' => $item->status?->codigo ?? 'PENDIENTE',
+                    'status_label' => $item->status?->valor ?? 'Pendiente',
+                    'status_metadata' => $item->status?->metadata ?? [],
                     'delivered_at' => $item->delivered_at ? $item->delivered_at->format('Y-m-d H:i') : null,
                     'return_reason' => $item->return_reason,
                     'shipment' => $shipment ? [
                         'id' => $shipment->id,
                         'tracking_number' => $shipment->tracking_number,
-                        'reference_type' => $shipment->reference_type,
+                        'reference_type_id' => $shipment->reference_type_id,
+                        'reference_type' => $shipment->referenceType?->valor ?? $shipment->referenceType?->codigo,
+                        'reference_type_code' => $shipment->referenceType?->codigo,
                         'reference_number' => $shipment->reference_number,
                         'lpn_code' => $shipment->lpn_code,
                         'pieces_count' => $shipment->pieces_count ?? 1,
-                        'package_type' => $shipment->package_type,
+                        'package_type_id' => $shipment->package_type_id,
+                        'package_type' => $shipment->packageType?->valor ?? $shipment->packageType?->codigo,
+                        'package_type_code' => $shipment->packageType?->codigo,
                         'weight_lb' => $shipment->weight_lb,
                         'weight_kg' => $shipment->weight_kg,
                         'destination_address' => $shipment->destination_address,
-                        'status' => $shipment->status,
+                        'status_id' => $shipment->status_id,
+                        'status' => $shipment->status?->codigo ?? 'PENDIENTE',
+                        'status_code' => $shipment->status?->codigo ?? 'PENDIENTE',
+                        'status_label' => $shipment->status?->valor ?? 'Pendiente',
+                        'status_metadata' => $shipment->status?->metadata ?? [],
                         'recipient_name' => $shipment->recipient_name ?: ($shipment->sender ? ($shipment->sender->full_name ?? ($shipment->sender->first_name.' '.$shipment->sender->last_name)) : 'Sin destinatario'),
                         'recipient_phone' => $shipment->recipient_phone ?: ($shipment->sender?->phone ?? ''),
                         'sender_name' => $shipment->recipient_name ?: ($shipment->sender ? ($shipment->sender->full_name ?? ($shipment->sender->first_name.' '.$shipment->sender->last_name)) : 'Sin cliente'),

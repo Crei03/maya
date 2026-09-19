@@ -30,7 +30,13 @@ class ShipmentController extends Controller
      */
     public function page(): Response
     {
-        return Inertia::render('Admin/Paquetes/Index');
+        $cs = app(\App\Services\CatalogoService::class);
+
+        return Inertia::render('Admin/Paquetes/Index', [
+            'referenceTypes' => $cs->getValoresBySlug('tipo-referencia'),
+            'packageTypes' => $cs->getValoresBySlug('tipo-paquete'),
+            'statuses' => $cs->getValoresBySlug('estado-envio'),
+        ]);
     }
 
     /**
@@ -82,7 +88,7 @@ class ShipmentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $shipment,
+            'data' => $this->service->show($shipment->id),
             'message' => 'Paquete creado exitosamente',
         ], 201);
     }
@@ -99,7 +105,7 @@ class ShipmentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $updated,
+                'data' => $this->service->show($updated->id),
                 'message' => 'Paquete actualizado exitosamente',
             ]);
         } catch (ModelNotFoundException) {

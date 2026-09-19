@@ -53,7 +53,7 @@ class CatalogoController extends Controller
             })
             ->orderBy('sort_order')
             ->orderBy('valor')
-            ->get(['id', 'codigo', 'valor', 'descripcion', 'tenant_id', 'is_global', 'sort_order', 'is_active', 'parent_id']);
+            ->get(['id', 'codigo', 'valor', 'descripcion', 'metadata', 'tenant_id', 'is_global', 'sort_order', 'is_active', 'parent_id']);
 
         return response()->json([
             'success' => true,

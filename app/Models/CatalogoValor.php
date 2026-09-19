@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  */
-class CatalogoValor extends Model
+class CatalogoValor extends Model implements \Stringable
 {
     use HasFactory;
 
@@ -51,6 +51,7 @@ class CatalogoValor extends Model
         'is_global',
         'sort_order',
         'is_active',
+        'metadata',
     ];
 
     /**
@@ -62,6 +63,7 @@ class CatalogoValor extends Model
         'is_global' => 'boolean',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
+        'metadata' => 'array',
     ];
 
     /**
@@ -145,5 +147,10 @@ class CatalogoValor extends Model
     public function getLabel(): string
     {
         return $this->valor;
+    }
+
+    public function __toString(): string
+    {
+        return (string) ($this->codigo ?? '');
     }
 }

@@ -37,6 +37,8 @@ class WarehouseApiTest extends TestCase
         );
         $this->tenant->makeCurrent();
 
+        $this->seed(\Database\Seeders\CatalogoSeeder::class);
+
         $this->gestor = User::factory()->create([
             'role' => User::ROLE_GESTOR,
             'status' => true,

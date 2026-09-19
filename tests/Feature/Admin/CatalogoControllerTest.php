@@ -108,7 +108,7 @@ class CatalogoControllerTest extends TestCase
         ]);
     }
 
-    public function test_store_valor_rejects_codigo_over_3_chars(): void
+    public function test_store_valor_rejects_codigo_over_100_chars(): void
     {
         $catalogo = Catalogo::query()->create([
             'nombre' => 'Test',
@@ -118,7 +118,7 @@ class CatalogoControllerTest extends TestCase
 
         $payload = [
             'catalogo_id' => $catalogo->id,
-            'codigo' => 'LONG',
+            'codigo' => str_repeat('A', 101),
             'valor' => 'Nuevo Valor',
         ];
 

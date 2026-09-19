@@ -60,23 +60,73 @@ const filters = reactive({
     date_to: '',
 });
 
-// --- Opciones de Catálogo ---
-const referenceTypes = [
-    { value: 'pedido', label: 'Pedido / Orden', icon: 'file-invoice' },
-    { value: 'factura', label: 'Factura', icon: 'file-lines' },
-    { value: 'transferencia', label: 'Transferencia', icon: 'arrow-right-arrow-left' },
-    { value: 'recibo', label: 'Recibo', icon: 'receipt' },
-    { value: 'guia', label: 'Guía Remisión', icon: 'truck-ramp-box' },
-    { value: 'lpn', label: 'LPN / Pallet directo', icon: 'pallet' },
-    { value: 'otro', label: 'Otro', icon: 'asterisk' },
-];
+const props = defineProps({
+    referenceTypes: { type: Array, default: () => [] },
+    packageTypes: { type: Array, default: () => [] },
+    statuses: { type: Array, default: () => [] },
+});
 
-const packageTypes = [
-    { value: 'caja', label: 'Caja', icon: 'box' },
-    { value: 'palet', label: 'Palet / Tarima', icon: 'pallet' },
-    { value: 'sobre', label: 'Sobre', icon: 'envelope' },
-    { value: 'paquete', label: 'Paquete / Bulto', icon: 'boxes-stacked' },
-];
+// --- Opciones de Catálogo Dinámicas ---
+const referenceTypeOptions = computed(() => {
+    if (props.referenceTypes && props.referenceTypes.length > 0) {
+        return props.referenceTypes.map((rt) => ({
+            id: rt.id,
+            value: rt.codigo,
+            label: rt.valor,
+            icon: rt.metadata?.icon || 'file-lines',
+        }));
+    }
+    return [
+        { value: 'PEDIDO', label: 'Pedido / Orden', icon: 'file-invoice' },
+        { value: 'FACTURA', label: 'Factura', icon: 'file-lines' },
+        { value: 'TRANSFERENCIA', label: 'Transferencia', icon: 'arrow-right-arrow-left' },
+        { value: 'RECIBO', label: 'Recibo', icon: 'receipt' },
+        { value: 'GUIA', label: 'Guía Remisión', icon: 'truck-ramp-box' },
+        { value: 'LPN', label: 'LPN / Pallet directo', icon: 'pallet' },
+        { value: 'OTRO', label: 'Otro', icon: 'asterisk' },
+    ];
+});
+const referenceTypes = referenceTypeOptions;
+
+const packageTypeOptions = computed(() => {
+    if (props.packageTypes && props.packageTypes.length > 0) {
+        return props.packageTypes.map((pt) => ({
+            id: pt.id,
+            value: pt.codigo,
+            label: pt.valor,
+            icon: pt.metadata?.icon || 'box',
+        }));
+    }
+    return [
+        { value: 'CAJA', label: 'Caja', icon: 'box' },
+        { value: 'PALET', label: 'Palet / Tarima', icon: 'pallet' },
+        { value: 'SOBRE', label: 'Sobre', icon: 'envelope' },
+        { value: 'PAQUETE', label: 'Paquete / Bulto', icon: 'boxes-stacked' },
+    ];
+});
+const packageTypes = packageTypeOptions;
+
+const statusOptions = computed(() => {
+    if (props.statuses && props.statuses.length > 0) {
+        return props.statuses.map((st) => ({
+            id: st.id,
+            value: st.codigo,
+            label: st.valor,
+            badge: st.metadata?.badge,
+            icon: st.metadata?.icon,
+        }));
+    }
+    return [
+        { value: 'PENDIENTE', label: 'Pendiente' },
+        { value: 'EN_BODEGA', label: 'En bodega' },
+        { value: 'ASIGNADO', label: 'Asignado' },
+        { value: 'EN_TRANSITO', label: 'En tránsito' },
+        { value: 'ENTREGADO', label: 'Entregado' },
+        { value: 'DEVUELTO', label: 'Devuelto' },
+        { value: 'FALLIDO', label: 'Fallido' },
+        { value: 'CANCELADO', label: 'Cancelado' },
+    ];
+});
 
 // --- Vista actual y Formulario (Recepción Guiada WMS) ---
 const currentView = ref('list'); // 'list' | 'form'
@@ -91,7 +141,7 @@ const recipientMode = ref('directory');
 const saveToClientsDirectory = ref(false);
 
 const form = reactive({
-    reference_type: 'pedido',
+    reference_type: 'PEDIDO',
     reference_number: '',
     lpn_code: '',
     pieces_count: 1,
@@ -101,13 +151,13 @@ const form = reactive({
     warehouse_id: '',
     destination_address: '',
     destination_coords: '',
-    package_type: 'caja',
+    package_type: 'CAJA',
     weight_lb: '',
     weight_kg: '',
     total_cost: '',
     content_description: '',
     dimensions: '',
-    status: 'pending',
+    status: 'PENDIENTE',
 });
 
 // --- Texto completo del documento WMS para verificación ---
@@ -279,7 +329,7 @@ const fetchAllShipmentsForExport = async () => {
 // --- Manejo del Formulario (Crear / Editar) ---
 const resetForm = (preserveContext = false) => {
     const defaultWarehouse = form.warehouse_id || localStorage.getItem('maya_last_warehouse_id') || warehousesList.value[0]?.id || '';
-    const defaultRefType = preserveContext ? form.reference_type : 'pedido';
+    const defaultRefType = preserveContext ? form.reference_type : 'PEDIDO';
 
     Object.assign(form, {
         reference_type: defaultRefType,
@@ -292,13 +342,13 @@ const resetForm = (preserveContext = false) => {
         warehouse_id: defaultWarehouse,
         destination_address: '',
         destination_coords: '',
-        package_type: 'caja',
+        package_type: 'CAJA',
         weight_lb: '',
         weight_kg: '',
         total_cost: '',
         content_description: '',
         dimensions: '',
-        status: 'pending',
+        status: 'PENDIENTE',
     });
 
     if (!preserveContext) {
@@ -329,7 +379,7 @@ const openEditForm = (shipment) => {
     formErrors.value = {};
 
     Object.assign(form, {
-        reference_type: shipment.reference_type || 'pedido',
+        reference_type: shipment.reference_type_code || shipment.reference_type || 'PEDIDO',
         reference_number: shipment.reference_number || '',
         lpn_code: shipment.lpn_code || '',
         pieces_count: shipment.pieces_count || 1,
@@ -339,13 +389,13 @@ const openEditForm = (shipment) => {
         warehouse_id: shipment.warehouse_id || shipment.warehouse?.id || '',
         destination_address: shipment.destination_address || '',
         destination_coords: shipment.destination_coords ? (typeof shipment.destination_coords === 'object' ? JSON.stringify(shipment.destination_coords) : shipment.destination_coords) : '',
-        package_type: shipment.package_type || 'caja',
+        package_type: shipment.package_type_code || shipment.package_type || 'CAJA',
         weight_lb: shipment.weight_lb || '',
         weight_kg: shipment.weight_kg || '',
         total_cost: shipment.total_cost || '',
         content_description: shipment.content_description || '',
         dimensions: shipment.dimensions ? (typeof shipment.dimensions === 'object' ? JSON.stringify(shipment.dimensions) : shipment.dimensions) : '',
-        status: shipment.status || 'pending',
+        status: shipment.status_code || shipment.status || 'PENDIENTE',
     });
 
     if (shipment.sender_id) {
@@ -653,13 +703,9 @@ onMounted(async () => {
                             @change="fetchShipments(1)"
                         >
                             <option value="">Todos los estados</option>
-                            <option value="pending">Pendiente</option>
-                            <option value="in_warehouse">En bodega</option>
-                            <option value="assigned">Asignado a ruta</option>
-                            <option value="in_transit">En tránsito</option>
-                            <option value="delivered">Entregado</option>
-                            <option value="returned">Devuelto</option>
-                            <option value="failed">Fallido</option>
+                            <option v-for="st in statusOptions" :key="st.value" :value="st.value">
+                                {{ st.label }}
+                            </option>
                         </select>
                     </div>
 
@@ -700,10 +746,9 @@ onMounted(async () => {
                                 @change="fetchShipments(1)"
                             >
                                 <option value="">Todos los empaques</option>
-                                <option value="caja">Caja</option>
-                                <option value="palet">Palet / Tarima</option>
-                                <option value="sobre">Sobre</option>
-                                <option value="paquete">Paquete</option>
+                                <option v-for="pt in packageTypes" :key="pt.value" :value="pt.value">
+                                    {{ pt.label }}
+                                </option>
                             </select>
                         </div>
                         <button
@@ -766,15 +811,7 @@ onMounted(async () => {
                     <template #cell-status="{ row }">
                         <span
                             class="inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap"
-                            :class="{
-                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300': row.status === 'pending',
-                                'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300': row.status === 'in_warehouse',
-                                'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300': row.status === 'assigned',
-                                'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300': row.status === 'in_transit',
-                                'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': row.status === 'delivered',
-                                'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300': row.status === 'returned',
-                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': row.status === 'failed',
-                            }"
+                            :class="row.status_metadata?.badge || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'"
                         >
                             {{ row.status_label || row.status }}
                         </span>
@@ -1352,13 +1389,9 @@ onMounted(async () => {
                                 v-model="form.status"
                                 class="mt-1 w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-2 text-xs text-[var(--maya-text-main)] focus:outline-none"
                             >
-                                <option value="pending">Pendiente</option>
-                                <option value="in_warehouse">En bodega</option>
-                                <option value="assigned">Asignado</option>
-                                <option value="in_transit">En tránsito</option>
-                                <option value="delivered">Entregado</option>
-                                <option value="returned">Devuelto</option>
-                                <option value="failed">Fallido</option>
+                                <option v-for="st in statusOptions" :key="st.value" :value="st.value">
+                                    {{ st.label }}
+                                </option>
                             </select>
                         </div>
 
@@ -1499,8 +1532,11 @@ onMounted(async () => {
                     <div v-if="detailShipment">
                         <div class="flex items-center gap-2">
                             <span class="font-mono text-sm font-bold text-[var(--maya-primary)]">{{ detailShipment.tracking_number }}</span>
-                            <span class="rounded-full bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 text-xs font-semibold text-[var(--maya-primary)]">
-                                {{ detailShipment.status }}
+                            <span
+                                class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                                :class="detailShipment.status_metadata?.badge || 'bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)]'"
+                            >
+                                {{ detailShipment.status_label || detailShipment.status }}
                             </span>
                             <span v-if="detailShipment.lpn_code" class="rounded-full bg-emerald-100 px-2.5 py-0.5 font-mono text-xs font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                                 LPN: {{ detailShipment.lpn_code }}
@@ -1564,7 +1600,7 @@ onMounted(async () => {
                     </div>
 
                     <!-- Evidencia de Entrega si está entregado -->
-                    <div v-if="detailShipment.status === 'delivered'" class="rounded-xl border border-green-200 bg-green-50/50 p-4 dark:border-green-900/30 dark:bg-green-950/20">
+                    <div v-if="detailShipment.status === 'delivered' || detailShipment.status === 'ENTREGADO' || detailShipment.status_code === 'ENTREGADO'" class="rounded-xl border border-green-200 bg-green-50/50 p-4 dark:border-green-900/30 dark:bg-green-950/20">
                         <h4 class="flex items-center gap-2 text-xs font-bold text-green-800 dark:text-green-300">
                             <font-awesome-icon :icon="['fas', 'check']" />
                             Comprobante de Entrega
