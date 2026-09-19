@@ -585,9 +585,6 @@ onMounted(async () => {
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <span v-if="pagination?.total !== undefined" class="text-xs font-semibold text-[var(--maya-text-muted)] bg-[var(--maya-hover-surface)] border border-[var(--maya-border)] px-3 py-1.5 rounded-lg">
-                        {{ pagination.total }} {{ pagination.total === 1 ? 'cliente' : 'clientes' }}
-                    </span>
 
                     <Excel
                         :columns="exportColumns"
@@ -940,14 +937,6 @@ onMounted(async () => {
                                             {{ selectedClient.residencia || 'No especificada' }}
                                         </span>
                                     </div>
-
-                                    <!-- Total Envíos Registrados -->
-                                    <div class="flex items-center justify-between py-1">
-                                        <span class="text-[var(--maya-text-muted)]">Envíos totales</span>
-                                        <span class="font-bold text-[var(--maya-primary)]">
-                                            {{ selectedClient.deliveries_count || 0 }} entregas
-                                        </span>
-                                    </div>
                                 </div>
                             </div>
 
@@ -1001,7 +990,7 @@ onMounted(async () => {
                             </span>
                             <div>
                                 <h4 class="text-xs font-bold text-[var(--maya-text-main)] uppercase tracking-wider">
-                                    Punto de Referencia Logístico
+                                    Punto de Referencia
                                 </h4>
                                 <p class="text-xs text-[var(--maya-text-muted)] mt-0.5 font-medium">
                                     {{ selectedClient.reference_point || 'Sin punto de referencia específico proporcionado.' }}
