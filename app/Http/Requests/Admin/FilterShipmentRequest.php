@@ -22,6 +22,8 @@ class FilterShipmentRequest extends FormRequest
             'search' => ['string', 'nullable'],
             'status' => ['string', 'nullable'],
             'warehouse_id' => ['string', 'nullable'],
+            'reference_type' => ['string', 'nullable'],
+            'lpn_code' => ['string', 'nullable'],
             'driver_id' => ['integer', 'nullable'],
             'date_from' => ['date', 'nullable'],
             'date_to' => ['date', 'nullable', 'after_or_equal:date_from'],

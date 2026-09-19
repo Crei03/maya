@@ -25,9 +25,16 @@ class StoreShipmentRequest extends FormRequest
             'content_description' => ['nullable', 'string'],
             'weight_kg' => ['nullable', 'numeric', 'min:0'],
             'dimensions' => ['nullable', 'string', 'max:255'],
-            'destination_coords' => ['nullable', 'string', 'max:255'],
-            'sender_id' => ['required', 'exists:clients,id'],
+            'destination_coords' => ['nullable'],
+            'sender_id' => ['required_without:recipient_name', 'nullable', 'exists:clients,id'],
+            'recipient_name' => ['required_without:sender_id', 'nullable', 'string', 'max:255'],
+            'recipient_phone' => ['nullable', 'string', 'max:50'],
             'warehouse_id' => ['required', 'exists:warehouses,id'],
+            'reference_type' => ['nullable', 'string', 'max:50'],
+            'reference_number' => ['nullable', 'string', 'max:100'],
+            'lpn_code' => ['nullable', 'string', 'max:100'],
+            'pieces_count' => ['nullable', 'integer', 'min:1'],
+            'total_cost' => ['nullable', 'numeric', 'min:0'],
         ];
     }
 
@@ -44,10 +51,12 @@ class StoreShipmentRequest extends FormRequest
             'weight_lb.min' => 'El peso en libras no puede ser negativo.',
             'weight_kg.numeric' => 'El peso debe ser un valor numérico.',
             'weight_kg.min' => 'El peso no puede ser negativo.',
-            'sender_id.required' => 'El remitente es obligatorio.',
+            'sender_id.required_without' => 'El remitente o cliente destinatario es obligatorio.',
             'sender_id.exists' => 'El remitente seleccionado no existe.',
+            'recipient_name.required_without' => 'El nombre del destinatario es obligatorio si no selecciona un cliente.',
             'warehouse_id.required' => 'La bodega es obligatoria.',
             'warehouse_id.exists' => 'La bodega seleccionada no existe.',
+            'pieces_count.min' => 'La cantidad de bultos debe ser al menos 1.',
         ];
     }
 
@@ -65,7 +74,14 @@ class StoreShipmentRequest extends FormRequest
             'dimensions' => 'dimensiones',
             'destination_coords' => 'coordenadas de destino',
             'sender_id' => 'remitente',
+            'recipient_name' => 'destinatario',
+            'recipient_phone' => 'teléfono del destinatario',
             'warehouse_id' => 'bodega',
+            'reference_type' => 'tipo de documento',
+            'reference_number' => 'número de referencia',
+            'lpn_code' => 'código LPN',
+            'pieces_count' => 'cantidad de bultos',
+            'total_cost' => 'costo total',
         ];
     }
 }

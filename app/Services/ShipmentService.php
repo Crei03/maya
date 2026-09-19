@@ -21,7 +21,7 @@ class ShipmentService
     {
         $perPage = (int) ($filters['per_page'] ?? 15);
 
-        $query = Shipment::query();
+        $query = Shipment::query()->orderByDesc('created_at');
 
         if (! empty($filters['status'] ?? null)) {
             $query->where('status', $filters['status']);
@@ -31,12 +31,24 @@ class ShipmentService
             $search = $filters['search'];
             $query->where(function (Builder $q) use ($search): void {
                 $q->where('tracking_number', 'like', "%{$search}%")
+                    ->orWhere('reference_number', 'like', "%{$search}%")
+                    ->orWhere('lpn_code', 'like', "%{$search}%")
+                    ->orWhere('recipient_name', 'like', "%{$search}%")
+                    ->orWhere('recipient_phone', 'like', "%{$search}%")
                     ->orWhereHas('sender', function (Builder $q) use ($search): void {
                         $q->where('first_name', 'like', "%{$search}%")
                             ->orWhere('last_name', 'like', "%{$search}%")
                             ->orWhere('full_name', 'like', "%{$search}%");
                     });
             });
+        }
+
+        if (! empty($filters['reference_type'] ?? null)) {
+            $query->where('reference_type', $filters['reference_type']);
+        }
+
+        if (! empty($filters['lpn_code'] ?? null)) {
+            $query->where('lpn_code', 'like', "%{$filters['lpn_code']}%");
         }
 
         if (! empty($filters['warehouse_id'] ?? null)) {
@@ -77,6 +89,8 @@ class ShipmentService
                 'last_page' => $paginator->lastPage(),
                 'per_page' => $paginator->perPage(),
                 'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
             ],
         ];
     }
@@ -114,6 +128,17 @@ class ShipmentService
      */
     public function create(array $data): Shipment
     {
+        // Si viene sender_id pero no recipient_name, sincronizar desde el cliente
+        if (! empty($data['sender_id']) && empty($data['recipient_name'])) {
+            $client = \App\Models\Client::find($data['sender_id']);
+            if ($client) {
+                $data['recipient_name'] = $client->full_name ?? trim(($client->first_name ?? '').' '.($client->last_name ?? ''));
+                if (empty($data['recipient_phone'])) {
+                    $data['recipient_phone'] = $client->phone;
+                }
+            }
+        }
+
         return Shipment::create($data);
     }
 
@@ -185,16 +210,21 @@ class ShipmentService
             $data['task_title'] = $shipment->driverTask->title;
         }
 
+        $clientName = $shipment->recipient_name;
+        $clientPhone = $shipment->recipient_phone;
+
         if ($shipment->relationLoaded('sender') && $shipment->sender) {
             $data['sender'] = $shipment->sender->toArray();
             $data['client'] = $shipment->sender->toArray();
-            $clientName = $shipment->sender->full_name
-                ?? trim(($shipment->sender->first_name ?? '').' '.($shipment->sender->last_name ?? ''));
-            $data['recipient_name'] = $clientName;
-            $data['client_name'] = $clientName;
-            $data['recipient_phone'] = $shipment->sender->phone ?? '';
-            $data['client_phone'] = $shipment->sender->phone ?? '';
+            $clientName = $clientName ?: ($shipment->sender->full_name
+                ?? trim(($shipment->sender->first_name ?? '').' '.($shipment->sender->last_name ?? '')));
+            $clientPhone = $clientPhone ?: ($shipment->sender->phone ?? '');
         }
+
+        $data['recipient_name'] = $clientName ?: 'Sin destinatario';
+        $data['client_name'] = $clientName ?: 'Sin destinatario';
+        $data['recipient_phone'] = $clientPhone ?: '';
+        $data['client_phone'] = $clientPhone ?: '';
 
         if ($shipment->relationLoaded('trackingEvents')) {
             $data['tracking_events'] = $shipment->trackingEvents->toArray();

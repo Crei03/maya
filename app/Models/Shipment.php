@@ -102,6 +102,34 @@ class Shipment extends Model
     ];
 
     // ============================================================================
+    // Tipos de Documento de Referencia WMS / ERP
+    // ============================================================================
+
+    public const REF_TYPE_PEDIDO = 'pedido';
+
+    public const REF_TYPE_FACTURA = 'factura';
+
+    public const REF_TYPE_TRANSFERENCIA = 'transferencia';
+
+    public const REF_TYPE_RECIBO = 'recibo';
+
+    public const REF_TYPE_GUIA = 'guia';
+
+    public const REF_TYPE_LPN = 'lpn';
+
+    public const REF_TYPE_OTRO = 'otro';
+
+    public const REF_TYPES = [
+        self::REF_TYPE_PEDIDO => 'Pedido / Orden de Venta',
+        self::REF_TYPE_FACTURA => 'Factura',
+        self::REF_TYPE_TRANSFERENCIA => 'Transferencia',
+        self::REF_TYPE_RECIBO => 'Recibo',
+        self::REF_TYPE_GUIA => 'Guía de Remisión',
+        self::REF_TYPE_LPN => 'LPN / Pallet directo',
+        self::REF_TYPE_OTRO => 'Otro',
+    ];
+
+    // ============================================================================
     // Configuración del modelo
     // ============================================================================
 
@@ -131,7 +159,13 @@ class Shipment extends Model
         'warehouse_id',
         'driver_task',
         'tracking_number',
+        'reference_type',
+        'reference_number',
+        'lpn_code',
+        'pieces_count',
         'sender_id',
+        'recipient_name',
+        'recipient_phone',
         'destination_address',
         'destination_coords',
         'weight_kg',
@@ -167,6 +201,7 @@ class Shipment extends Model
         return [
             'destination_coords' => 'array',
             'dimensions' => 'array',
+            'pieces_count' => 'integer',
             'weight_kg' => 'decimal:2',
             'weight_lb' => 'decimal:2',
             'total_cost' => 'decimal:2',
@@ -223,6 +258,22 @@ class Shipment extends Model
     public function scopeByTracking($query, string $trackingNumber)
     {
         return $query->where('tracking_number', $trackingNumber);
+    }
+
+    /**
+     * Scope para buscar por código LPN o Pallet.
+     */
+    public function scopeByLpn($query, string $lpn)
+    {
+        return $query->where('lpn_code', $lpn);
+    }
+
+    /**
+     * Scope para buscar por número de documento de referencia WMS.
+     */
+    public function scopeByReference($query, string $ref)
+    {
+        return $query->where('reference_number', $ref);
     }
 
     /**

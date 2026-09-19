@@ -548,4 +548,92 @@ class ShipmentApiTest extends TestCase
 
         $response->assertUnauthorized();
     }
+
+    // ============================================================================
+    // WMS / Last-Mile Integration Tests
+    // ============================================================================
+
+    public function test_create_shipment_with_wms_reference_fields(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Vía Tocumen, Bodega 4B',
+            'package_type' => 'palet',
+            'weight_lb' => 450.0,
+            'sender_id' => $client->id,
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => Shipment::REF_TYPE_PEDIDO,
+            'reference_number' => 'PED-2026-9901',
+            'lpn_code' => 'LPN-8839201',
+            'pieces_count' => 12,
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.reference_type', 'pedido')
+            ->assertJsonPath('data.reference_number', 'PED-2026-9901')
+            ->assertJsonPath('data.lpn_code', 'LPN-8839201')
+            ->assertJsonPath('data.pieces_count', 12);
+    }
+
+    public function test_create_shipment_with_direct_recipient_without_client_id(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        $payload = [
+            'destination_address' => 'Avenida Central, Local 12, David, Chiriquí',
+            'package_type' => 'caja',
+            'weight_lb' => 15.5,
+            'recipient_name' => 'Ferretería El Tornillo',
+            'recipient_phone' => '6789-0123',
+            'warehouse_id' => $warehouse->id,
+            'reference_type' => Shipment::REF_TYPE_FACTURA,
+            'reference_number' => 'FAC-4401',
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.shipments.store'), $payload);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.recipient_name', 'Ferretería El Tornillo')
+            ->assertJsonPath('data.recipient_phone', '6789-0123')
+            ->assertJsonPath('data.reference_number', 'FAC-4401');
+    }
+
+    public function test_search_shipments_by_lpn_and_reference_number(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        Shipment::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouse->id,
+            'destination_address' => 'Destino A',
+            'weight_lb' => 10,
+            'recipient_name' => 'Cliente Alpha',
+            'reference_number' => 'PED-SPECIAL-777',
+            'lpn_code' => 'LPN-UNIQUE-999',
+        ]);
+
+        Shipment::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
+
+        // Search by LPN
+        $resLpn = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.list', ['search' => 'UNIQUE-999']));
+        $resLpn->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.lpn_code', 'LPN-UNIQUE-999');
+
+        // Search by Reference Number
+        $resRef = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.list', ['search' => 'SPECIAL-777']));
+        $resRef->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.reference_number', 'PED-SPECIAL-777');
+    }
 }
