@@ -494,58 +494,6 @@ onMounted(async () => {
                 <!-- PANEL DERECHO: DETALLE Y VALORES          -->
                 <!-- ========================================== -->
                 <div class="lg:col-span-8 xl:col-span-8 flex flex-col p-5 bg-[var(--maya-bg-surface)] space-y-6">
-                    
-                    <!-- SECCIÓN 1: FICHA Y ACCIONES DEL CATÁLOGO -->
-                    <div v-if="selectedCatalogo" class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] p-4 shadow-sm">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2 mb-1">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-primary)] bg-[var(--maya-primary-alpha)] px-2 py-0.5 rounded-md">
-                                        Catálogo
-                                    </span>
-                                    <span
-                                        class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium"
-                                        :class="selectedCatalogo.is_global
-                                            ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                                            : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200'"
-                                    >
-                                        {{ selectedCatalogo.is_global ? 'Base del Sistema' : 'Catálogo Personalizado' }}
-                                    </span>
-                                    <span class="font-mono text-[11px] text-[var(--maya-text-muted)] bg-[var(--maya-bg-surface)] px-2 py-0.5 rounded border border-[var(--maya-border)]">
-                                        slug: {{ selectedCatalogo.slug }}
-                                    </span>
-                                </div>
-                                <h2 class="text-base font-bold text-[var(--maya-text-main)] truncate">
-                                    {{ selectedCatalogo.nombre }}
-                                </h2>
-                                <p class="text-xs text-[var(--maya-text-muted)] mt-1">
-                                    {{ selectedCatalogo.description || 'Sin descripción especificada para este catálogo.' }}
-                                </p>
-                            </div>
-
-                            <!-- Botones de Acción del Catálogo -->
-                            <div class="flex items-center gap-2 shrink-0">
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition-colors"
-                                    title="Editar catálogo"
-                                    @click="openEditCatalogoModal"
-                                >
-                                    <font-awesome-icon :icon="['fas', 'pencil']" class="text-xs text-[var(--maya-text-muted)]" />
-                                    Editar Catálogo
-                                </button>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30 px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                                    title="Eliminar catálogo"
-                                    @click="deleteCatalogo(selectedCatalogo)"
-                                >
-                                    <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
-                                    Eliminar Catálogo
-                                </button>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- SECCIÓN 2: VALORES DEL CATÁLOGO SELECCIONADO -->
                     <div class="flex-1 flex flex-col min-h-0">
