@@ -6,6 +6,7 @@ import DataTable from '@/Components/DataTable.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import Modal from '@/Components/Modal.vue';
 import { useAlert } from '@/Composables/useAlert';
+import ShipmentTaskKpiCards from './Components/ShipmentTaskKpiCards.vue';
 
 const { showAlert, showConfirm } = useAlert();
 
@@ -18,6 +19,7 @@ const successMessage = ref('');
 const errorMessage = ref('');
 
 const props = defineProps({
+    initialStats: { type: Object, default: () => null },
     taskStatuses: { type: Array, default: () => [] },
     itemStatuses: { type: Array, default: () => [] },
     priorities: { type: Array, default: () => [] },
@@ -56,12 +58,14 @@ const filters = reactive({
 
 const columns = [
     { key: 'title', label: 'Código Plan' },
+    { key: 'status', label: 'Estado' },
     { key: 'driver_name', label: 'Conductor' },
     { key: 'vehicle_label', label: 'Vehículo' },
     { key: 'warehouse_name', label: 'Bodega Salida' },
-    { key: 'start_date', label: 'Salida' },
+    { key: 'scheduled_date', label: 'Fecha Programada' },
+    { key: 'started_at', label: 'Inicio de Ruta' },
+    { key: 'total_duration', label: 'Duración Total' },
     { key: 'progress', label: 'Progreso' },
-    { key: 'status', label: 'Estado / Tiempo' },
     { key: 'actions', label: 'Acciones' },
 ];
 
@@ -107,8 +111,8 @@ const quickStopForm = reactive({
     pieces_count: 1,
 });
 
-// Modal de Detalle
-const detailOpen = ref(false);
+// --- Vista y Detalle de Plan de Entrega ---
+const currentView = ref('list'); // 'list' | 'detail'
 const detailTask = ref(null);
 const loadingDetail = ref(false);
 const savingReorder = ref(false);
@@ -160,7 +164,44 @@ const priorityCounts = computed(() => {
     return counts;
 });
 
-// --- API Calls ---
+// --- API Calls y Métodos de KPIs ---
+const kpiStats = ref(props.initialStats || {
+    total: 0,
+    by_status: {},
+    summary: {},
+});
+const loadingKpis = ref(false);
+
+const fetchKpiStats = async () => {
+    loadingKpis.value = true;
+    try {
+        const params = {};
+        if (filters.origin_warehouse_id) params.origin_warehouse_id = filters.origin_warehouse_id;
+
+        const res = await window.axios.get(route('admin.shipment-tasks.stats'), { params });
+        if (res.data?.success) {
+            kpiStats.value = res.data.data;
+        }
+    } catch (e) {
+        console.warn('Error al cargar KPIs de planes de entrega:', e);
+    } finally {
+        loadingKpis.value = false;
+    }
+};
+
+const handleSelectKpiStatus = (statusKey) => {
+    filters.status = statusKey;
+    fetchTasks(1);
+};
+
+const refreshAll = async () => {
+    await Promise.all([fetchTasks(1), fetchKpiStats()]);
+};
+
+const onWarehouseFilterChange = async () => {
+    await Promise.all([fetchTasks(1), fetchKpiStats()]);
+};
+
 const fetchTasks = async (page = 1) => {
     loading.value = true;
     errorMessage.value = '';
@@ -540,6 +581,7 @@ const submitPlan = async () => {
             successMessage.value = response.data.message || 'Plan de entrega creado exitosamente.';
             closeWizard();
             await fetchTasks(1);
+            fetchKpiStats();
         }
     } catch (err) {
         if (err?.response?.status === 422) {
@@ -557,10 +599,10 @@ const submitPlan = async () => {
     }
 };
 
-// --- Modal de Detalle y Reordenamiento ---
-const openDetailModal = async (task) => {
+// --- Vista de Detalle y Reordenamiento ---
+const openDetail = async (task) => {
     detailTask.value = null;
-    detailOpen.value = true;
+    currentView.value = 'detail';
     loadingDetail.value = true;
     try {
         const res = await window.axios.get(route('admin.shipment-tasks.show', { id: task.id }));
@@ -574,9 +616,14 @@ const openDetailModal = async (task) => {
     }
 };
 
-const closeDetailModal = () => {
-    detailOpen.value = false;
+const closeDetail = () => {
+    currentView.value = 'list';
+    detailTask.value = null;
+    fetchTasks(pagination.value?.current_page || 1);
 };
+
+const openDetailModal = openDetail;
+const closeDetailModal = closeDetail;
 
 // Reordenar en vista de detalle
 const moveDetailStopUp = (index) => {
@@ -639,6 +686,54 @@ const saveDetailReorder = async () => {
 const currentNow = ref(Date.now());
 let timerInterval = null;
 
+// --- Formato de Fechas y Duración ---
+const formatDate = (dateStr) => {
+    if (!dateStr) return '--';
+    try {
+        const iso = typeof dateStr === 'string' ? dateStr.replace(' ', 'T') : dateStr;
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString('es-PA', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    } catch {
+        return dateStr;
+    }
+};
+
+const formatDuration = (task) => {
+    if (!task) return '--';
+    if (isTaskPending(task)) {
+        return '--';
+    }
+    if (isTaskInProgress(task)) {
+        const startStr = task.started_at_raw || task.started_at || task.start_date_raw || task.start_date;
+        if (!startStr) return '--';
+        const iso = typeof startStr === 'string' ? startStr.replace(' ', 'T') : startStr;
+        const start = new Date(iso).getTime();
+        if (isNaN(start)) return '--';
+        const elapsedSec = Math.max(0, Math.floor((currentNow.value - start) / 1000));
+        const totalMinutes = Math.floor(elapsedSec / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+    }
+    if (task.duration_formatted) {
+        return task.duration_formatted;
+    }
+    if (task.total_hours !== null && task.total_hours !== undefined) {
+        const totalMinutes = Math.round(Number(task.total_hours) * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+    }
+    return '--';
+};
+
 const formatElapsedTime = (startDateStr) => {
     if (!startDateStr) return '00:00:00';
     const start = new Date(startDateStr).getTime();
@@ -648,6 +743,18 @@ const formatElapsedTime = (startDateStr) => {
     const minutes = String(Math.floor((elapsedSec % 3600) / 60)).padStart(2, '0');
     const seconds = String(elapsedSec % 60).padStart(2, '0');
     return `${hours}:${minutes}:${seconds}`;
+};
+
+// Conversión de peso a kilogramos
+const formatWeightKg = (lb, kg) => {
+    if (kg !== null && kg !== undefined && kg !== '' && !isNaN(kg) && Number(kg) > 0) {
+        return `${Number(kg).toFixed(2)} kg`;
+    }
+    const valLb = parseFloat(lb);
+    if (!isNaN(valLb) && valLb > 0) {
+        return `${(valLb / 2.20462).toFixed(2)} kg`;
+    }
+    return '0.00 kg';
 };
 
 // --- Acciones del Ciclo de Vida de Tareas ---
@@ -663,7 +770,8 @@ const confirmStartTask = async (task) => {
         if (res.data.success) {
             successMessage.value = `¡Plan ${task.title} iniciado exitosamente!`;
             await fetchTasks(pagination.value?.current_page || 1);
-            if (detailOpen.value && detailTask.value?.id === task.id) {
+            fetchKpiStats();
+            if (currentView.value === 'detail' && detailTask.value?.id === task.id) {
                 detailTask.value = res.data.data;
             }
         }
@@ -686,7 +794,8 @@ const confirmCompleteTask = async (task) => {
         if (res.data.success) {
             successMessage.value = `¡Plan ${task.title} finalizado correctamente!`;
             await fetchTasks(pagination.value?.current_page || 1);
-            if (detailOpen.value && detailTask.value?.id === task.id) {
+            fetchKpiStats();
+            if (currentView.value === 'detail' && detailTask.value?.id === task.id) {
                 detailTask.value = res.data.data;
             }
         }
@@ -720,7 +829,8 @@ const submitCancelTask = async () => {
             successMessage.value = `Plan ${taskToCancel.value.title} cancelado. Paquetes retornados a bodega.`;
             cancelModalOpen.value = false;
             await fetchTasks(pagination.value?.current_page || 1);
-            if (detailOpen.value && detailTask.value?.id === taskToCancel.value.id) {
+            fetchKpiStats();
+            if (currentView.value === 'detail' && detailTask.value?.id === taskToCancel.value.id) {
                 detailTask.value = res.data.data;
             }
         }
@@ -823,6 +933,9 @@ onMounted(async () => {
     }, 1000);
     await fetchCatalogs();
     await fetchTasks(1);
+    if (!props.initialStats) {
+        await fetchKpiStats();
+    }
 });
 
 onUnmounted(() => {
@@ -833,10 +946,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head title="Planes de Entrega" />
+    <Head :title="currentView === 'detail' ? `Detalle: ${detailTask?.title || 'Plan de Entrega'}` : 'Planes de Entrega'" />
 
-    <AdminLayout title="Planes de Entrega">
-        <div class="space-y-6">
+    <AdminLayout :title="currentView === 'detail' ? 'Detalle de Plan de Entrega' : 'Planes de Entrega'">
+        <!-- ==================================================================== -->
+        <!-- VISTA 1: LISTADO Y TABLA DE PLANES DE ENTREGA                         -->
+        <!-- ==================================================================== -->
+        <div v-if="currentView === 'list'" class="space-y-6">
             <!-- Header con resumen y botón de nuevo plan -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
                 <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -853,7 +969,7 @@ onUnmounted(() => {
                     </div>
 
                     <div class="flex items-center gap-3">
-                        <RefreshButton :loading="loading" @refresh="fetchTasks(1)" />
+                        <RefreshButton :loading="loading" @refresh="refreshAll" />
                         <button
                             type="button"
                             class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--maya-primary-dark)]"
@@ -910,7 +1026,7 @@ onUnmounted(() => {
                         <select
                             v-model="filters.origin_warehouse_id"
                             class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-3 py-2 text-sm text-[var(--maya-text-main)] focus:border-[var(--maya-primary)] focus:outline-none"
-                            @change="fetchTasks(1)"
+                            @change="onWarehouseFilterChange"
                         >
                             <option value="">Todas las bodegas</option>
                             <option v-for="wh in warehousesList" :key="wh.id" :value="wh.id">
@@ -920,6 +1036,14 @@ onUnmounted(() => {
                     </div>
                 </div>
             </section>
+
+            <!-- KPI Cards de Estados y Total -->
+            <ShipmentTaskKpiCards
+                :stats="kpiStats"
+                :active-status="filters.status"
+                :loading="loadingKpis"
+                @select-status="handleSelectKpiStatus"
+            />
 
             <!-- Tabla de Planes de Entrega -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm">
@@ -939,47 +1063,8 @@ onUnmounted(() => {
                         </span>
                     </template>
 
-                    <template #cell-driver_name="{ row }">
-                        <div class="flex flex-col">
-                            <span class="font-medium text-[var(--maya-text-main)]">{{ row.driver_name }}</span>
-                            <span v-if="row.driver_email" class="text-xs text-[var(--maya-text-muted)]">{{ row.driver_email }}</span>
-                        </div>
-                    </template>
-
-                    <template #cell-vehicle_label="{ row }">
-                        <span class="text-xs text-[var(--maya-text-main)]">{{ row.vehicle_label }}</span>
-                    </template>
-
-                    <template #cell-warehouse_name="{ row }">
-                        <span class="text-xs text-[var(--maya-text-main)]">{{ row.warehouse_name }}</span>
-                    </template>
-
-                    <template #cell-progress="{ row }">
-                        <div class="flex flex-col gap-1 min-w-[130px]">
-                            <div class="flex items-center justify-between text-[11px]">
-                                <span class="font-medium text-[var(--maya-text-main)]">
-                                    {{ row.delivered_count || 0 }} / {{ row.total_items }} ent.
-                                </span>
-                                <span class="font-mono text-[10px] text-[var(--maya-text-muted)]">{{ row.progress_percent || 0 }}%</span>
-                            </div>
-                            <div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--maya-hover-surface)] border border-[var(--maya-border)]">
-                                <div
-                                    class="h-full rounded-full transition-all duration-300"
-                                    :class="isTaskCompleted(row) ? 'bg-green-500' : 'bg-[var(--maya-primary)]'"
-                                    :style="{ width: `${row.progress_percent || 0}%` }"
-                                />
-                            </div>
-                            <div class="flex items-center gap-1 text-[10px] text-[var(--maya-text-muted)]">
-                                <span v-if="row.priority_counts?.alta" class="inline-block h-2 w-2 rounded-full bg-red-500" title="Altas" />
-                                <span v-if="row.priority_counts?.media" class="inline-block h-2 w-2 rounded-full bg-amber-500" title="Medias" />
-                                <span v-if="row.priority_counts?.baja" class="inline-block h-2 w-2 rounded-full bg-gray-400" title="Bajas" />
-                                <span class="ml-auto font-mono text-[10px]">{{ row.total_weight_lb }} lbs</span>
-                            </div>
-                        </div>
-                    </template>
-
                     <template #cell-status="{ row }">
-                        <div class="flex flex-col gap-1 items-start">
+                        <div class="flex items-center">
                             <span
                                 v-if="isTaskPending(row)"
                                 class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
@@ -1018,14 +1103,93 @@ onUnmounted(() => {
                             >
                                 {{ row.status_label || row.status }}
                             </span>
+                        </div>
+                    </template>
 
-                            <!-- Cronómetro o Duración -->
-                            <div v-if="isTaskInProgress(row) && (row.start_date_raw || row.start_date)" class="flex items-center gap-1 font-mono text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                                <font-awesome-icon :icon="['fas', 'clock']" class="text-[10px]" />
-                                <span>{{ formatElapsedTime(row.start_date_raw || row.start_date) }}</span>
+                    <template #cell-driver_name="{ row }">
+                        <div class="flex flex-col">
+                            <span class="font-medium text-[var(--maya-text-main)]">{{ row.driver_name }}</span>
+                            <span v-if="row.driver_email" class="text-xs text-[var(--maya-text-muted)]">{{ row.driver_email }}</span>
+                        </div>
+                    </template>
+
+                    <template #cell-vehicle_label="{ row }">
+                        <span class="text-xs text-[var(--maya-text-main)]">{{ row.vehicle_label }}</span>
+                    </template>
+
+                    <template #cell-warehouse_name="{ row }">
+                        <span class="text-xs text-[var(--maya-text-main)]">{{ row.warehouse_name }}</span>
+                    </template>
+
+                    <template #cell-scheduled_date="{ row }">
+                        <span class="text-xs text-[var(--maya-text-main)] whitespace-nowrap">
+                            {{ formatDate(row.scheduled_date_raw || row.scheduled_date || row.start_date_raw || row.start_date) }}
+                        </span>
+                    </template>
+
+                    <template #cell-started_at="{ row }">
+                        <span v-if="row.started_at || row.started_at_raw" class="font-mono text-xs text-[var(--maya-text-main)] whitespace-nowrap">
+                            {{ formatDate(row.started_at_raw || row.started_at) }}
+                        </span>
+                        <span v-else class="text-xs text-[var(--maya-text-muted)]">
+                            Sin iniciar
+                        </span>
+                    </template>
+
+                    <template #cell-total_duration="{ row }">
+                        <div v-if="isTaskInProgress(row)" class="flex items-center gap-1.5 font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                            <span class="relative flex h-2 w-2">
+                                <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
+                                <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+                            </span>
+                            <span>{{ formatDuration(row) }}</span>
+                        </div>
+                        <span v-else-if="isTaskCompleted(row)" class="font-mono text-xs font-medium text-[var(--maya-text-main)] whitespace-nowrap">
+                            {{ formatDuration(row) }}
+                        </span>
+                        <span v-else-if="isTaskCancelled(row)" class="font-mono text-xs text-[var(--maya-text-muted)] whitespace-nowrap">
+                            {{ formatDuration(row) }}
+                        </span>
+                        <span v-else class="text-xs text-[var(--maya-text-muted)]">
+                            --
+                        </span>
+                    </template>
+
+                    <template #cell-progress="{ row }">
+                        <div class="flex flex-col gap-1 min-w-[130px]">
+                            <div class="flex items-center justify-between text-[11px]">
+                                <span class="font-medium text-[var(--maya-text-main)]">
+                                    {{ row.delivered_count || 0 }} / {{ row.total_items }} ent.
+                                </span>
+                                <span class="font-mono text-[10px] text-[var(--maya-text-muted)]">{{ row.progress_percent || 0 }}%</span>
                             </div>
-                            <div v-else-if="isTaskCompleted(row) && row.total_hours !== null" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
-                                Duración: {{ row.total_hours }}h
+                            <div class="h-1.5 w-full overflow-hidden rounded-full bg-[var(--maya-hover-surface)] border border-[var(--maya-border)]">
+                                <div
+                                    class="h-full rounded-full transition-all duration-300"
+                                    :class="isTaskCompleted(row) ? 'bg-green-500' : 'bg-[var(--maya-primary)]'"
+                                    :style="{ width: `${row.progress_percent || 0}%` }"
+                                />
+                            </div>
+                            <div class="flex items-center gap-1 text-[10px] text-[var(--maya-text-muted)]">
+                                <span v-if="row.priority_counts?.alta" class="inline-block h-2 w-2 rounded-full bg-red-500" title="Altas" />
+                                <span v-if="row.priority_counts?.media" class="inline-block h-2 w-2 rounded-full bg-amber-500" title="Medias" />
+                                <span v-if="row.priority_counts?.baja" class="inline-block h-2 w-2 rounded-full bg-gray-400" title="Bajas" />
+                                <div class="ml-auto inline-flex items-center gap-1 whitespace-nowrap">
+                                    <span class="font-mono text-[10px]">{{ row.total_weight_lb }} lbs</span>
+                                    <span
+                                        class="group relative inline-flex cursor-help items-center justify-center text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)] transition-colors"
+                                        :title="`Conversión: ${formatWeightKg(row.total_weight_lb, row.total_weight_kg)}`"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'info-circle']" class="text-[10px]" />
+                                        <!-- Tooltip visual flotante en hover -->
+                                        <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col items-center z-30">
+                                            <span class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                ≈ {{ formatWeightKg(row.total_weight_lb, row.total_weight_kg) }}
+                                            </span>
+                                            <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                        </span>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -1033,50 +1197,391 @@ onUnmounted(() => {
                     <template #cell-actions="{ row }">
                         <div class="flex items-center gap-1.5">
                             <button
-                                v-if="isTaskPending(row)"
                                 type="button"
-                                title="Iniciar Ruta"
-                                class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                                @click="confirmStartTask(row)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'truck']" />
-                                Iniciar
-                            </button>
-
-                            <button
-                                v-else-if="isTaskInProgress(row)"
-                                type="button"
-                                title="Finalizar Ruta"
-                                class="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-green-700"
-                                @click="confirmCompleteTask(row)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'check']" />
-                                Finalizar
-                            </button>
-
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-2.5 py-1 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
-                                title="Ver detalle de paradas"
-                                @click="openDetailModal(row)"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-2.5 py-1 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
+                                title="Ver detalle del plan"
+                                @click="openDetail(row)"
                             >
                                 <font-awesome-icon :icon="['fas', 'eye']" />
-                                Paradas
-                            </button>
-
-                            <button
-                                v-if="!isTaskCompleted(row) && !isTaskCancelled(row)"
-                                type="button"
-                                title="Cancelar Plan de Entrega"
-                                class="inline-flex items-center justify-center rounded-lg border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20"
-                                @click="openCancelTaskModal(row)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'xmark']" />
+                                Ver
                             </button>
                         </div>
                     </template>
                 </DataTable>
             </section>
+        </div>
+
+        <!-- ==================================================================== -->
+        <!-- VISTA 2: DETALLE DEL PLAN DE ENTREGA                                 -->
+        <!-- ==================================================================== -->
+        <div v-else-if="currentView === 'detail'" class="space-y-6">
+            <!-- Header de Navegación y Acciones del Detalle -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-xs"
+                            title="Volver al listado de planes"
+                            @click="closeDetail"
+                        >
+                            <font-awesome-icon :icon="['fas', 'arrow-left']" />
+                        </button>
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h1 class="text-lg font-bold text-[var(--maya-text-main)]">
+                                    Detalle de Plan de Entrega
+                                </h1>
+                                <span v-if="detailTask?.title" class="rounded-lg bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
+                                    {{ detailTask.title }}
+                                </span>
+                                <span
+                                    v-if="detailTask && isTaskInProgress(detailTask)"
+                                    class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                                >
+                                    <span class="relative flex h-2 w-2">
+                                        <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
+                                        <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+                                    </span>
+                                    En curso &bull; {{ formatDuration(detailTask) }}
+                                </span>
+                                <span
+                                    v-else-if="detailTask && isTaskCompleted(detailTask)"
+                                    class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'check']" />
+                                    Finalizado ({{ formatDuration(detailTask) }})
+                                </span>
+                                <span
+                                    v-else-if="detailTask && isTaskCancelled(detailTask)"
+                                    class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'xmark']" />
+                                    Cancelado
+                                </span>
+                                <span
+                                    v-else-if="detailTask && isTaskPending(detailTask)"
+                                    class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-bold text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'clock']" />
+                                    Pendiente
+                                </span>
+                            </div>
+                            <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
+                                Información de la ruta, paradas asignadas y control de entregas.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button
+                            v-if="detailTask && isTaskPending(detailTask)"
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-4 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition"
+                            :disabled="savingReorder"
+                            @click="saveDetailReorder"
+                        >
+                            <font-awesome-icon :icon="['fas', 'check']" />
+                            {{ savingReorder ? 'Guardando...' : 'Guardar Reordenamiento' }}
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-2.5 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
+                            @click="closeDetail"
+                        >
+                            <font-awesome-icon :icon="['fas', 'arrow-left']" />
+                            Volver al Listado
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Notificaciones en el detalle -->
+                <div v-if="successMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-success)] bg-[var(--maya-success-alpha)] p-3 text-sm text-[var(--maya-success-dark)]">
+                    <div class="flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'circle-check']" />
+                        <span>{{ successMessage }}</span>
+                    </div>
+                    <button type="button" class="text-xs font-bold underline" @click="successMessage = ''">✕</button>
+                </div>
+                <div v-if="errorMessage" class="mt-4 flex items-center justify-between rounded-xl border border-[var(--maya-danger)] bg-[var(--maya-danger-alpha)] p-3 text-sm text-[var(--maya-danger)]">
+                    <div class="flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'circle-exclamation']" />
+                        <span>{{ errorMessage }}</span>
+                    </div>
+                    <button type="button" class="text-xs font-bold underline" @click="errorMessage = ''">✕</button>
+                </div>
+            </section>
+
+            <!-- Loading State -->
+            <section v-if="loadingDetail" class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-12 text-center shadow-sm">
+                <div class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)] mb-3">
+                    <font-awesome-icon :icon="['fas', 'spinner']" class="fa-spin text-xl" />
+                </div>
+                <p class="text-sm font-medium text-[var(--maya-text-muted)]">Cargando información del plan de entrega...</p>
+            </section>
+
+            <!-- Detail Task Content -->
+            <div v-else-if="detailTask" class="space-y-6">
+                <!-- Métricas de Paradas (un renglón completo) -->
+                <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-muted)] mb-3 flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'boxes-stacked']" />
+                        Métricas de Paradas
+                    </h3>
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 text-center">
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-3">
+                            <span class="text-[11px] text-[var(--maya-text-muted)] block">Total</span>
+                            <p class="text-lg font-bold text-[var(--maya-text-main)]">{{ detailTask.total_items }}</p>
+                        </div>
+                        <div class="rounded-xl border border-green-200 bg-green-50/50 p-3 dark:border-green-900/40 dark:bg-green-950/20">
+                            <span class="text-[11px] text-green-700 dark:text-green-400 block">Entregados</span>
+                            <p class="text-lg font-bold text-green-700 dark:text-green-300">{{ detailTask.delivered_count || 0 }}</p>
+                        </div>
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-900/40 dark:bg-blue-950/20">
+                            <span class="text-[11px] text-blue-700 dark:text-blue-400 block">En Ruta</span>
+                            <p class="text-lg font-bold text-blue-700 dark:text-blue-300">{{ detailTask.pending_count || 0 }}</p>
+                        </div>
+                        <div class="rounded-xl border border-red-200 bg-red-50/50 p-3 dark:border-red-900/40 dark:bg-red-950/20">
+                            <span class="text-[11px] text-red-700 dark:text-red-400 block">Retornados</span>
+                            <p class="text-lg font-bold text-red-700 dark:text-red-300">{{ detailTask.returned_count || 0 }}</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Ficha técnica (un renglón completo) -->
+                <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-muted)] mb-3 flex items-center gap-2">
+                        <font-awesome-icon :icon="['fas', 'route']" />
+                        Ficha Técnica de la Ruta
+                    </h3>
+                    <div class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Conductor</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5 truncate" :title="detailTask.driver_name">{{ detailTask.driver_name }}</p>
+                        </div>
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Vehículo</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5 truncate" :title="detailTask.vehicle_label">{{ detailTask.vehicle_label }}</p>
+                        </div>
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Bodega Salida</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5 truncate" :title="detailTask.warehouse_name">{{ detailTask.warehouse_name }}</p>
+                        </div>
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Fecha Programada</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5">
+                                {{ formatDate(detailTask.scheduled_date_raw || detailTask.scheduled_date || detailTask.start_date_raw || detailTask.start_date) }}
+                            </p>
+                        </div>
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Inicio de Ruta</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5">
+                                {{ (detailTask.started_at || detailTask.started_at_raw) ? formatDate(detailTask.started_at_raw || detailTask.started_at) : 'Sin iniciar' }}
+                            </p>
+                        </div>
+                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
+                            <span class="text-[var(--maya-text-muted)] block text-[11px]">Duración Total</span>
+                            <p class="font-semibold text-[var(--maya-text-main)] mt-0.5">
+                                {{ formatDuration(detailTask) }}
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Lista de Paradas de la Ruta -->
+                <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                    <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--maya-border)] pb-3">
+                        <div>
+                            <h4 class="text-sm font-bold text-[var(--maya-text-main)] flex items-center gap-2">
+                                <font-awesome-icon :icon="['fas', 'location-dot']" class="text-[var(--maya-primary)]" />
+                                Paradas de la Ruta ({{ detailTask.items?.length || 0 }})
+                            </h4>
+                            <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
+                                Secuencia planificada de entrega para el conductor.
+                            </p>
+                        </div>
+                        <div>
+                            <span v-if="isTaskPending(detailTask)" class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--maya-primary-alpha)] px-2.5 py-1 text-xs font-semibold text-[var(--maya-primary)]">
+                                Puedes reordenar paradas respetando la prioridad
+                            </span>
+                            <span v-else-if="isTaskInProgress(detailTask)" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                Registro de entregas y retornos en tiempo real
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Lista de paradas (items) -->
+                    <div v-if="detailTask.items?.length === 0" class="py-12 text-center text-sm text-[var(--maya-text-muted)]">
+                        No hay paradas asignadas a este plan de entrega.
+                    </div>
+
+                    <div v-else class="space-y-3">
+                        <div
+                            v-for="(item, idx) in detailTask.items"
+                            :key="item.id"
+                            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-[var(--maya-border)] p-4 text-xs transition-colors"
+                            :class="{
+                                'bg-green-50/30 dark:bg-green-950/10 border-green-200 dark:border-green-900/40': isItemDelivered(item),
+                                'bg-red-50/30 dark:bg-red-950/10 border-red-200 dark:border-red-900/40': isItemReturned(item),
+                                'hover:bg-[var(--maya-hover-surface)]': isItemPending(item)
+                            }"
+                        >
+                            <div class="flex items-start gap-3.5">
+                                <span
+                                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-bold text-white text-xs shadow-xs"
+                                    :class="isItemDelivered(item) ? 'bg-green-600' : isItemReturned(item) ? 'bg-red-600' : 'bg-[var(--maya-primary)]'"
+                                >
+                                    {{ item.stop_order }}
+                                </span>
+                                <div>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-bold text-sm text-[var(--maya-text-main)]">
+                                            {{ item.shipment?.recipient_name || item.shipment?.sender_name || 'Destinatario' }}
+                                        </span>
+                                        <span v-if="item.shipment?.lpn_code" class="rounded bg-emerald-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                            LPN: {{ item.shipment.lpn_code }}
+                                        </span>
+                                        <span v-if="item.shipment?.reference_number" class="rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+                                            {{ (item.shipment?.reference_type || 'Doc').toUpperCase() }}: {{ item.shipment.reference_number }}
+                                        </span>
+                                        <span
+                                            class="rounded px-2 py-0.5 text-[10px] font-bold uppercase"
+                                            :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
+                                        >
+                                            {{ item.priority_label || item.priority }}
+                                        </span>
+                                        <span class="font-mono text-xs text-[var(--maya-primary)] font-semibold">
+                                            {{ item.shipment?.tracking_number }}
+                                        </span>
+                                        <span v-if="item.shipment?.weight_lb" class="font-mono text-xs text-[var(--maya-text-muted)]">
+                                            {{ (item.shipment?.pieces_count || 1) > 1 ? `${item.shipment.pieces_count} bultos · ` : '' }}({{ item.shipment.weight_lb }} lbs)
+                                        </span>
+                                    </div>
+                                    <p class="text-[var(--maya-text-muted)] mt-1 flex items-center gap-1.5 text-xs">
+                                        <font-awesome-icon :icon="['fas', 'location-dot']" class="text-[var(--maya-text-muted)]" />
+                                        {{ item.shipment?.destination_address }}
+                                    </p>
+
+                                    <!-- Estado de parada -->
+                                    <div class="mt-1.5 flex items-center gap-2">
+                                        <span
+                                            v-if="isItemDelivered(item)"
+                                            class="inline-flex items-center gap-1 font-semibold text-green-700 dark:text-green-400 text-xs"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'check']" />
+                                            Entregado {{ item.delivered_at ? `(${item.delivered_at})` : '' }}
+                                        </span>
+                                        <span
+                                            v-else-if="isItemReturned(item)"
+                                            class="inline-flex items-center gap-1 font-semibold text-red-700 dark:text-red-400 text-xs"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'rotate-left']" />
+                                            Devuelto: {{ item.return_reason || 'Sin motivo' }}
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 text-[var(--maya-text-muted)] text-xs"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'clock']" class="text-[10px]" />
+                                            Pendiente de entrega
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Acciones por Parada -->
+                            <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                <!-- Si está en curso y la parada está pendiente -->
+                                <template v-if="isTaskInProgress(detailTask) && isItemPending(item)">
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 shadow-sm transition"
+                                        title="Confirmar Entrega"
+                                        @click="markStopDelivered(item)"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'check']" />
+                                        Entregar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/20 transition"
+                                        title="Registrar Intento Fallido"
+                                        @click="openReturnStopModal(item)"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'rotate-left']" />
+                                        Retorno
+                                    </button>
+                                </template>
+
+                                <!-- Si está pendiente (reordenar y desasignar) -->
+                                <template v-else-if="isTaskPending(detailTask)">
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition disabled:opacity-30"
+                                        :disabled="idx === 0"
+                                        title="Subir parada"
+                                        @click="moveDetailStopUp(idx)"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'arrow-up']" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition disabled:opacity-30"
+                                        :disabled="idx === detailTask.items.length - 1"
+                                        title="Bajar parada"
+                                        @click="moveDetailStopDown(idx)"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'arrow-down']" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/20 text-xs transition"
+                                        title="Desasignar de este plan"
+                                        @click="unassignStopFromTask(item)"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'trash']" />
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer inferior con acciones -->
+                    <div class="mt-6 flex items-center justify-between border-t border-[var(--maya-border)] pt-4">
+                        <div>
+                            <button
+                                v-if="isTaskInProgress(detailTask)"
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-green-700 transition"
+                                @click="confirmCompleteTask(detailTask)"
+                            >
+                                <font-awesome-icon :icon="['fas', 'check']" />
+                                Finalizar Ruta Completa
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button
+                                v-if="isTaskPending(detailTask)"
+                                type="button"
+                                class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition"
+                                :disabled="savingReorder"
+                                @click="saveDetailReorder"
+                            >
+                                <font-awesome-icon :icon="['fas', 'check']" />
+                                {{ savingReorder ? 'Guardando...' : 'Guardar Reordenamiento' }}
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-2 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
+                                @click="closeDetail"
+                            >
+                                Volver al Listado
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
 
         <!-- ==================================================================== -->
@@ -1707,324 +2212,6 @@ onUnmounted(() => {
             </div>
         </Modal>
 
-        <!-- ==================================================================== -->
-        <!-- MODAL DE DETALLE DEL PLAN Y REORDENAMIENTO                          -->
-        <!-- ==================================================================== -->
-        <Modal :show="detailOpen" max-width="3xl" @close="closeDetailModal">
-            <div class="p-6">
-                <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-3">
-                    <div v-if="detailTask">
-                        <div class="flex items-center gap-2">
-                            <span class="font-mono text-xs font-bold text-black dark:text-white">{{ detailTask.title }}</span>
-                            <span
-                                v-if="isTaskInProgress(detailTask)"
-                                class="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                            >
-                                <span class="relative flex h-2 w-2">
-                                    <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
-                                    <span class="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
-                                </span>
-                                En curso &bull; {{ formatElapsedTime(detailTask.start_date_raw || detailTask.start_date) }}
-                            </span>
-                            <span
-                                v-else-if="isTaskCompleted(detailTask)"
-                                class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                            >
-                                <font-awesome-icon :icon="['fas', 'check']" />
-                                Finalizado ({{ detailTask.total_hours || 0 }} hrs)
-                            </span>
-                        </div>
-                        <h2 class="text-base font-bold text-[var(--maya-text-main)]">
-                            Detalle de Plan de Entrega
-                        </h2>
-                    </div>
-                    <button type="button" class="text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]" @click="closeDetailModal">
-                        <font-awesome-icon :icon="['fas', 'xmark']" />
-                    </button>
-                </div>
-
-                <div v-if="loadingDetail" class="py-8 text-center text-sm text-[var(--maya-text-muted)]">
-                    Cargando información del plan...
-                </div>
-
-                <div v-else-if="detailTask" class="mt-4 space-y-4">
-                    <!-- Ficha técnica -->
-                    <div class="grid grid-cols-2 gap-3 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3 text-xs sm:grid-cols-4">
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Conductor:</span>
-                            <p class="font-semibold">{{ detailTask.driver_name }}</p>
-                        </div>
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Vehículo:</span>
-                            <p class="font-semibold">{{ detailTask.vehicle_label }}</p>
-                        </div>
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Bodega Salida:</span>
-                            <p class="font-semibold">{{ detailTask.warehouse_name }}</p>
-                        </div>
-                        <div>
-                            <span class="text-[var(--maya-text-muted)]">Salida:</span>
-                            <p class="font-semibold">{{ detailTask.start_date || 'Inmediata' }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Métricas de paradas -->
-                    <div class="grid grid-cols-4 gap-2 text-center text-xs">
-                        <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-2">
-                            <span class="text-[11px] text-[var(--maya-text-muted)]">Total Paradas</span>
-                            <p class="text-base font-bold text-[var(--maya-text-main)]">{{ detailTask.total_items }}</p>
-                        </div>
-                        <div class="rounded-xl border border-green-200 bg-green-50/50 p-2 dark:border-green-900/40 dark:bg-green-950/20">
-                            <span class="text-[11px] text-green-700 dark:text-green-400">Entregados</span>
-                            <p class="text-base font-bold text-green-700 dark:text-green-300">{{ detailTask.delivered_count || 0 }}</p>
-                        </div>
-                        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-2 dark:border-blue-900/40 dark:bg-blue-950/20">
-                            <span class="text-[11px] text-blue-700 dark:text-blue-400">En Ruta / Pend.</span>
-                            <p class="text-base font-bold text-blue-700 dark:text-blue-300">{{ detailTask.pending_count || 0 }}</p>
-                        </div>
-                        <div class="rounded-xl border border-red-200 bg-red-50/50 p-2 dark:border-red-900/40 dark:bg-red-950/20">
-                            <span class="text-[11px] text-red-700 dark:text-red-400">Retornados</span>
-                            <p class="text-base font-bold text-red-700 dark:text-red-300">{{ detailTask.returned_count || 0 }}</p>
-                        </div>
-                    </div>
-
-                    <!-- Lista de Paradas -->
-                    <div>
-                        <div class="mb-2 flex items-center justify-between">
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
-                                Paradas de la Ruta ({{ detailTask.items?.length || 0 }})
-                            </h4>
-                            <span v-if="isTaskPending(detailTask)" class="text-[11px] text-[var(--maya-text-muted)]">
-                                Puedes reordenar paradas respetando la prioridad
-                            </span>
-                            <span v-else-if="isTaskInProgress(detailTask)" class="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                                Puedes registrar entregas y retornos en tiempo real
-                            </span>
-                        </div>
-
-                        <div class="max-h-[340px] space-y-2 overflow-y-auto pr-1">
-                            <div
-                                v-for="(item, idx) in detailTask.items"
-                                :key="item.id"
-                                class="flex items-center justify-between rounded-xl border border-[var(--maya-border)] p-3 text-xs transition-colors"
-                                :class="{
-                                    'bg-green-50/30 dark:bg-green-950/10 border-green-200 dark:border-green-900/40': isItemDelivered(item),
-                                    'bg-red-50/30 dark:bg-red-950/10 border-red-200 dark:border-red-900/40': isItemReturned(item),
-                                    'hover:bg-[var(--maya-hover-surface)]': isItemPending(item)
-                                }"
-                            >
-                                <div class="flex items-start gap-3">
-                                    <span
-                                        class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-bold text-white text-[11px]"
-                                        :class="isItemDelivered(item) ? 'bg-green-600' : isItemReturned(item) ? 'bg-red-600' : 'bg-[var(--maya-primary)]'"
-                                    >
-                                        {{ item.stop_order }}
-                                    </span>
-                                    <div>
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <span class="font-bold text-[var(--maya-text-main)]">{{ item.shipment?.recipient_name || item.shipment?.sender_name || 'Destinatario' }}</span>
-                                            <span v-if="item.shipment?.lpn_code" class="rounded bg-emerald-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                                LPN: {{ item.shipment.lpn_code }}
-                                            </span>
-                                            <span v-if="item.shipment?.reference_number" class="rounded bg-sky-100 px-1.5 py-0.2 font-mono text-[9px] font-bold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
-                                                {{ (item.shipment?.reference_type || 'Doc').toUpperCase() }}: {{ item.shipment.reference_number }}
-                                            </span>
-                                            <span
-                                                class="rounded px-1.5 py-0.2 text-[10px] font-bold uppercase"
-                                                :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'"
-                                            >
-                                                {{ item.priority_label || item.priority }}
-                                            </span>
-                                            <span class="font-mono text-[11px] text-[var(--maya-primary)]">
-                                                {{ item.shipment?.tracking_number }}
-                                            </span>
-                                            <span v-if="item.shipment?.weight_lb" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
-                                                {{ (item.shipment?.pieces_count || 1) > 1 ? `${item.shipment.pieces_count} bultos · ` : '' }}({{ item.shipment.weight_lb }} lbs)
-                                            </span>
-                                        </div>
-                                        <p class="text-[var(--maya-text-muted)] mt-0.5">
-                                            📍 {{ item.shipment?.destination_address }}
-                                        </p>
-
-                                        <!-- Estado de parada -->
-                                        <div class="mt-1 flex items-center gap-2">
-                                            <span
-                                                v-if="isItemDelivered(item)"
-                                                class="inline-flex items-center gap-1 font-semibold text-green-700 dark:text-green-400 text-[11px]"
-                                            >
-                                                <font-awesome-icon :icon="['fas', 'check']" />
-                                                Entregado {{ item.delivered_at ? `(${item.delivered_at})` : '' }}
-                                            </span>
-                                            <span
-                                                v-else-if="isItemReturned(item)"
-                                                class="inline-flex items-center gap-1 font-semibold text-red-700 dark:text-red-400 text-[11px]"
-                                            >
-                                                <font-awesome-icon :icon="['fas', 'rotate-left']" />
-                                                Devuelto: {{ item.return_reason || 'Sin motivo' }}
-                                            </span>
-                                            <span
-                                                v-else
-                                                class="inline-flex items-center gap-1 text-[var(--maya-text-muted)] text-[11px]"
-                                            >
-                                                <font-awesome-icon :icon="['fas', 'clock']" class="text-[9px]" />
-                                                Pendiente de entrega
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Acciones por Parada -->
-                                <div class="flex items-center gap-1.5 shrink-0 ml-2">
-                                    <!-- Si está en curso y la parada está pendiente -->
-                                    <template v-if="isTaskInProgress(detailTask) && isItemPending(item)">
-                                        <button
-                                            type="button"
-                                            class="inline-flex items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700 shadow-sm"
-                                            title="Confirmar Entrega"
-                                            @click="markStopDelivered(item)"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'check']" />
-                                            Entregar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="inline-flex items-center gap-1 rounded-lg border border-red-200 text-red-600 px-2 py-1 text-xs hover:bg-red-50 dark:hover:bg-red-900/20"
-                                            title="Registrar Intento Fallido"
-                                            @click="openReturnStopModal(item)"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'rotate-left']" />
-                                            Retorno
-                                        </button>
-                                    </template>
-
-                                    <!-- Si está pendiente (reordenar y desasignar) -->
-                                    <template v-else-if="isTaskPending(detailTask)">
-                                        <button
-                                            type="button"
-                                            class="inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--maya-border)] text-xs disabled:opacity-30"
-                                            :disabled="idx === 0"
-                                            title="Subir parada"
-                                            @click="moveDetailStopUp(idx)"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'arrow-up']" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="inline-flex h-6 w-6 items-center justify-center rounded border border-[var(--maya-border)] text-xs disabled:opacity-30"
-                                            :disabled="idx === detailTask.items.length - 1"
-                                            title="Bajar parada"
-                                            @click="moveDetailStopDown(idx)"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'arrow-down']" />
-                                        </button>
-                                        <button
-                                            type="button"
-                                            class="inline-flex h-6 w-6 items-center justify-center rounded border border-red-200 text-red-600 hover:bg-red-50 text-xs"
-                                            title="Desasignar de este plan"
-                                            @click="unassignStopFromTask(item)"
-                                        >
-                                            <font-awesome-icon :icon="['fas', 'trash']" />
-                                        </button>
-                                    </template>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Footer del Modal -->
-                    <div class="flex items-center justify-between border-t border-[var(--maya-border)] pt-4">
-                        <div>
-                            <button
-                                v-if="isTaskPending(detailTask)"
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
-                                @click="confirmStartTask(detailTask)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'truck']" />
-                                Iniciar Ruta Ahora
-                            </button>
-                            <button
-                                v-else-if="isTaskInProgress(detailTask)"
-                                type="button"
-                                class="inline-flex items-center gap-1.5 rounded-xl bg-green-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-green-700"
-                                @click="confirmCompleteTask(detailTask)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'check']" />
-                                Finalizar Ruta Completa
-                            </button>
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            <button
-                                v-if="isTaskPending(detailTask)"
-                                type="button"
-                                class="inline-flex items-center gap-2 rounded-xl bg-[var(--maya-primary)] px-4 py-2 text-xs font-semibold text-white hover:bg-[var(--maya-primary-dark)]"
-                                :disabled="savingReorder"
-                                @click="saveDetailReorder"
-                            >
-                                {{ savingReorder ? 'Guardando...' : 'Guardar Reordenamiento' }}
-                            </button>
-                            <button
-                                type="button"
-                                class="rounded-xl border border-[var(--maya-border)] px-4 py-2 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
-                                @click="closeDetailModal"
-                            >
-                                Cerrar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </Modal>
-
-        <!-- ==================================================================== -->
-        <!-- MODAL DE CANCELACIÓN DE PLAN                                         -->
-        <!-- ==================================================================== -->
-        <Modal :show="cancelModalOpen" max-width="md" @close="cancelModalOpen = false">
-            <div class="p-6">
-                <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-3">
-                    <h3 class="text-base font-bold text-red-600">Cancelar Plan de Entrega</h3>
-                    <button type="button" class="text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]" @click="cancelModalOpen = false">
-                        <font-awesome-icon :icon="['fas', 'xmark']" />
-                    </button>
-                </div>
-
-                <div class="mt-4 space-y-3 text-xs">
-                    <p class="text-[var(--maya-text-main)]">
-                        ¿Estás seguro de cancelar el plan <strong class="font-mono">{{ taskToCancel?.title }}</strong>?
-                        Todos los paquetes asignados que no hayan sido entregados retornarán automáticamente a la bodega de origen.
-                    </p>
-
-                    <div>
-                        <label class="block font-medium text-[var(--maya-text-main)] mb-1">Motivo de cancelación (opcional):</label>
-                        <textarea
-                            v-model="cancelReason"
-                            rows="3"
-                            class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-2 text-xs text-[var(--maya-text-main)] focus:ring-1 focus:ring-[var(--maya-primary)]"
-                            placeholder="Ej. Avería de vehículo, condiciones climáticas adversas, reprogramación solicitada..."
-                        />
-                    </div>
-                </div>
-
-                <div class="mt-6 flex justify-end gap-2 border-t border-[var(--maya-border)] pt-3">
-                    <button
-                        type="button"
-                        class="rounded-xl border border-[var(--maya-border)] px-4 py-2 text-xs font-medium text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)]"
-                        @click="cancelModalOpen = false"
-                    >
-                        Volver
-                    </button>
-                    <button
-                        type="button"
-                        class="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50"
-                        :disabled="cancellingTask"
-                        @click="submitCancelTask"
-                    >
-                        {{ cancellingTask ? 'Cancelando...' : 'Confirmar Cancelación' }}
-                    </button>
-                </div>
-            </div>
-        </Modal>
 
         <!-- ==================================================================== -->
         <!-- MODAL DE RETORNO DE PARADA                                           -->
