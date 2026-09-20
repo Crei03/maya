@@ -35,7 +35,7 @@ const user = computed(() => {
 
 const navigation = [
     { name: 'Dashboard', href: route('admin.dashboard'), icon: ['fas', 'house'], current: route().current('admin.dashboard') },
-    { name: 'Envíos', href: route('admin.paquetes'), icon: ['fas', 'box'], current: route().current('admin.paquetes*') },
+    { name: 'Paquetes', href: route('admin.paquetes'), icon: ['fas', 'box'], current: route().current('admin.paquetes*') },
     { name: 'Clientes', href: route('admin.clientes'), icon: ['fas', 'user'], current: route().current('admin.clientes*') },
     { name: 'Asignación', href: route('admin.planes-entrega'), icon: ['fas', 'truck'], current: route().current('admin.planes-entrega*') || route().current('admin.asignacion-transporte*') },
     { name: 'Conciliación', href: route('admin.conciliacion-cierre'), icon: ['fas', 'clipboard-check'], current: route().current('admin.conciliacion-cierre') },

@@ -277,7 +277,7 @@ const fetchKpiStats = async () => {
             kpiStats.value = res.data.data;
         }
     } catch (e) {
-        console.warn('Error al cargar KPIs de envíos:', e);
+        console.warn('Error al cargar KPIs de paquetes:', e);
     } finally {
         loadingKpis.value = false;
     }
@@ -304,7 +304,7 @@ const fetchShipments = async (page = 1) => {
         }
         fetchKpiStats();
     } catch (err) {
-        errorMessage.value = 'Error al cargar los envíos.';
+        errorMessage.value = 'Error al cargar los paquetes.';
     } finally {
         loading.value = false;
     }
@@ -649,11 +649,11 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción de Envíos') : 'Gestión de Envíos'" />
+    <Head :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción de Paquetes') : 'Gestión de Paquetes'" />
 
-    <AdminLayout :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción WMS') : 'Envíos'">
+    <AdminLayout :title="currentView === 'form' ? (editingId ? 'Editar Paquete' : 'Recepción WMS') : 'Paquetes'">
         <!-- ==================================================================== -->
-        <!-- VISTA 1: LISTADO Y TABLA DE ENVÍOS                                   -->
+        <!-- VISTA 1: LISTADO Y TABLA DE PAQUETES                                 -->
         <!-- ==================================================================== -->
         <div v-if="currentView === 'list'" class="space-y-6">
             <!-- Header y Acciones principales -->
@@ -664,10 +664,10 @@ onMounted(async () => {
                             <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)]">
                                 <font-awesome-icon :icon="['fas', 'boxes-stacked']" class="text-lg" />
                             </span>
-                            <h1 class="text-xl font-bold text-[var(--maya-text-main)]">Gestión de Envíos y Paquetes</h1>
+                            <h1 class="text-xl font-bold text-[var(--maya-text-main)]">Gestión de Paquetes</h1>
                         </div>
                         <p class="mt-1 text-sm text-[var(--maya-text-muted)]">
-                            Registro de paquetes, control de envíos y seguimiento de entregas.
+                            Registro, control de inventario y seguimiento de paquetes.
                         </p>
                     </div>
 
@@ -821,12 +821,12 @@ onMounted(async () => {
                 @select-status="handleSelectKpiStatus"
             />
 
-            <!-- Tabla de Envíos -->
+            <!-- Tabla de Paquetes -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-[var(--maya-border)] pb-3">
                     <div class="flex items-center gap-2">
                         <h3 class="text-sm font-bold text-[var(--maya-text-main)]">
-                            Listado de Envíos
+                            Listado de Paquetes
                         </h3>
                         <span v-if="pagination?.total !== undefined" class="rounded-full bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
                             {{ pagination.total }} {{ pagination.total === 1 ? 'paquete' : 'paquetes' }}
@@ -842,7 +842,7 @@ onMounted(async () => {
                     :per-page="perPage"
                     :visible-columns="visibleColumns"
                     :table-class="tableMinClass"
-                    empty-text="No hay envíos registrados todavía."
+                    empty-text="No hay paquetes registrados todavía."
                     @update:per-page="handlePerPageChange"
                     @change-page="fetchShipments"
                 >
@@ -996,7 +996,7 @@ onMounted(async () => {
                         <button
                             type="button"
                             class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-xs"
-                            title="Volver al listado de envíos"
+                            title="Volver al listado de paquetes"
                             @click="closeForm"
                         >
                             <font-awesome-icon :icon="['fas', 'arrow-left']" />
@@ -1004,7 +1004,7 @@ onMounted(async () => {
                         <div>
                             <div class="flex items-center gap-2">
                                 <h1 class="text-lg font-bold text-[var(--maya-text-main)]">
-                                    {{ editingId ? 'Editar Paquete / Envío' : 'Registro de Paquetes' }}
+                                    {{ editingId ? 'Editar Paquete' : 'Registro de Paquetes' }}
                                 </h1>
                                 <span v-if="editingId && editingTrackingNumber" class="rounded-lg bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
                                     #{{ editingTrackingNumber }}
@@ -1395,7 +1395,7 @@ onMounted(async () => {
                             </div>
                         </div>
 
-                        <!-- Dimensiones y Costo de Envío -->
+                        <!-- Dimensiones y Costo del Paquete -->
                         <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 shrink-0">
                             <div>
                                 <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
@@ -1411,7 +1411,7 @@ onMounted(async () => {
 
                             <div>
                                 <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                    Costo de Envío ($)
+                                    Costo del Paquete ($)
                                 </label>
                                 <input
                                     v-model="form.total_cost"
@@ -1426,7 +1426,7 @@ onMounted(async () => {
                         <!-- Estado (solo en edición) -->
                         <div v-if="editingId" class="mt-4 shrink-0">
                             <label class="block text-xs font-semibold text-[var(--maya-text-main)]">
-                                Estado del Envío
+                                Estado del Paquete
                             </label>
                             <select
                                 v-model="form.status"
