@@ -393,40 +393,40 @@ onMounted(async () => {
                 <!-- ========================================== -->
                 <div class="lg:col-span-4 xl:col-span-4 border-r border-[var(--maya-border)] flex flex-col bg-[var(--maya-bg-surface)]">
                     <!-- Cabecera de Catálogos con botón de Crear Catálogo -->
-                    <div class="p-3 border-b border-[var(--maya-border)] space-y-2.5 bg-[var(--maya-bg-base)]">
+                    <div class="p-3.5 border-b border-[var(--maya-border)] space-y-3 bg-[var(--maya-bg-base)]">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
-                                <span class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-main)]">
+                                <span class="text-sm font-bold uppercase tracking-wider text-[var(--maya-text-main)]">
                                     Catálogos
                                 </span>
-                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]">
+                                <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]">
                                     {{ filteredCatalogos.length }}
                                 </span>
                             </div>
                             <button
                                 type="button"
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--maya-primary)] px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition-colors"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--maya-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition-colors"
                                 title="Crear un nuevo catálogo"
                                 @click="openCreateCatalogoModal"
                             >
-                                <font-awesome-icon :icon="['fas', 'plus']" class="text-[11px]" />
+                                <font-awesome-icon :icon="['fas', 'plus']" class="text-xs" />
                                 Nuevo Catálogo
                             </button>
                         </div>
 
                         <!-- Buscador de catálogos -->
                         <div class="relative">
-                            <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--maya-text-muted)]" />
+                            <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--maya-text-muted)]" />
                             <input
                                 v-model="catalogSearch"
                                 type="text"
                                 placeholder="Buscar catálogo..."
-                                class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] py-2 pl-8 pr-8 text-xs text-[var(--maya-text-main)] placeholder-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--maya-primary)]"
+                                class="w-full rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] py-2.5 pl-9 pr-9 text-sm text-[var(--maya-text-main)] placeholder-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--maya-primary)]"
                             />
                             <button
                                 v-if="catalogSearch"
                                 type="button"
-                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
+                                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
                                 @click="catalogSearch = ''"
                             >
                                 <font-awesome-icon :icon="['fas', 'xmark']" />
@@ -436,13 +436,13 @@ onMounted(async () => {
 
                     <!-- Lista de Catálogos con scroll propio -->
                     <div class="flex-1 overflow-y-auto divide-y divide-[var(--maya-border)] max-h-[580px] lg:max-h-[calc(100vh-270px)]">
-                        <div v-if="loading && !catalogos.length" class="p-8 text-center text-xs text-[var(--maya-text-muted)]">
-                            <font-awesome-icon :icon="['fas', 'spinner']" class="fa-spin text-base mb-2" />
+                        <div v-if="loading && !catalogos.length" class="p-8 text-center text-sm text-[var(--maya-text-muted)]">
+                            <font-awesome-icon :icon="['fas', 'spinner']" class="fa-spin text-lg mb-2" />
                             <p>Cargando catálogos...</p>
                         </div>
 
                         <div v-else-if="!filteredCatalogos.length" class="p-8 text-center">
-                            <p class="text-xs text-[var(--maya-text-muted)]">No se encontraron catálogos coincidentes.</p>
+                            <p class="text-sm text-[var(--maya-text-muted)]">No se encontraron catálogos coincidentes.</p>
                         </div>
 
                         <button
@@ -457,20 +457,20 @@ onMounted(async () => {
                         >
                             <div class="min-w-0 pr-2">
                                 <div class="flex items-center gap-1.5">
-                                    <p class="text-xs font-semibold text-[var(--maya-text-main)] truncate group-hover:text-[var(--maya-primary)]">
+                                    <p class="text-sm font-semibold text-[var(--maya-text-main)] truncate group-hover:text-[var(--maya-primary)]">
                                         {{ catalogo.nombre }}
                                     </p>
-                                    <span v-if="!catalogo.is_global" class="inline-flex text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-medium">
+                                    <span v-if="!catalogo.is_global" class="inline-flex text-[10px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-medium">
                                         Propio
                                     </span>
                                 </div>
-                                <p class="text-[11px] text-[var(--maya-text-muted)] font-mono truncate mt-0.5">
+                                <p class="text-xs text-[var(--maya-text-muted)] font-mono truncate mt-0.5">
                                     {{ catalogo.slug }}
                                 </p>
                             </div>
-                            <div class="flex items-center gap-1.5 shrink-0">
+                            <div class="flex items-center gap-2 shrink-0">
                                 <span
-                                    class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0"
+                                    class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0"
                                     :class="selectedCatalogo?.id === catalogo.id
                                         ? 'bg-[var(--maya-primary)] text-white'
                                         : 'bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]'"
@@ -479,11 +479,11 @@ onMounted(async () => {
                                 </span>
                                 <button
                                     type="button"
-                                    class="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all"
+                                    class="opacity-0 group-hover:opacity-100 h-7 w-7 inline-flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all"
                                     title="Eliminar catálogo"
                                     @click.stop="deleteCatalogo(catalogo)"
                                 >
-                                    <font-awesome-icon :icon="['fas', 'trash']" class="text-[10px]" />
+                                    <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
                                 </button>
                             </div>
                         </button>
