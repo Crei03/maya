@@ -468,14 +468,24 @@ onMounted(async () => {
                                     {{ catalogo.slug }}
                                 </p>
                             </div>
-                            <span
-                                class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0"
-                                :class="selectedCatalogo?.id === catalogo.id
-                                    ? 'bg-[var(--maya-primary)] text-white'
-                                    : 'bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]'"
-                            >
-                                {{ catalogo.valores_count ?? 0 }}
-                            </span>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span
+                                    class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0"
+                                    :class="selectedCatalogo?.id === catalogo.id
+                                        ? 'bg-[var(--maya-primary)] text-white'
+                                        : 'bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]'"
+                                >
+                                    {{ catalogo.valores_count ?? 0 }}
+                                </span>
+                                <button
+                                    type="button"
+                                    class="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all"
+                                    title="Eliminar catálogo"
+                                    @click.stop="deleteCatalogo(catalogo)"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'trash']" class="text-[10px]" />
+                                </button>
+                            </div>
                         </button>
                     </div>
                 </div>
@@ -525,7 +535,6 @@ onMounted(async () => {
                                     Editar Catálogo
                                 </button>
                                 <button
-                                    v-if="!selectedCatalogo.is_global"
                                     type="button"
                                     class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30 px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                                     title="Eliminar catálogo"
