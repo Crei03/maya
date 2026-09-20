@@ -5,6 +5,9 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 const props = defineProps({
     catalogos: Object,
@@ -24,13 +27,14 @@ const debouncedSearch = debounce(() => {
 
 watch(search, debouncedSearch);
 
-const deleteCatalogo = (catalogo) => {
-    if (!confirm(`¿Estás seguro de eliminar el catálogo "${catalogo.nombre}"?`)) return;
+const deleteCatalogo = async (catalogo) => {
+    const confirmed = await showConfirm(`¿Estás seguro de eliminar el catálogo "${catalogo.nombre}"?`);
+    if (!confirmed) return;
 
     router.delete(route('Management.catalogos.destroy', catalogo.id), {
         preserveScroll: true,
         onError: (errors) => {
-            alert(errors.message || 'Error al eliminar el catálogo.');
+            showAlert(errors.message || 'Error al eliminar el catálogo.');
         },
     });
 };

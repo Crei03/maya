@@ -6,6 +6,9 @@ import DataTable from '@/Components/DataTable.vue';
 import Filters from '@/Components/buttons/Filters.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 const props = defineProps({
     ownershipTypes: {
@@ -249,13 +252,14 @@ const updateVehicle = async () => {
 };
 
 const deleteVehicle = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar este vehículo?')) return;
+    const confirmed = await showConfirm('¿Estás seguro de eliminar este vehículo?');
+    if (!confirmed) return;
     try {
         await window.axios.delete(route('admin.vehicles.destroy', { vehicle: id }));
         successMessage.value = 'Vehículo eliminado correctamente.';
         await fetchVehicles();
     } catch {
-        alert('No fue posible eliminar el vehículo. Intenta nuevamente.');
+        showAlert('No fue posible eliminar el vehículo. Intenta nuevamente.');
     }
 };
 

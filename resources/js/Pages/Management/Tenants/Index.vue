@@ -13,6 +13,9 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showConfirm } = useAlert();
 import debounce from 'lodash/debounce';
 
 const props = defineProps({
@@ -35,8 +38,9 @@ const debouncedSearch = debounce(() => {
 
 watch([search, status], debouncedSearch);
 
-const toggleStatus = (tenant) => {
-    if (confirm(`¿Estás seguro de ${tenant.status === 'active' ? 'pausar' : 'activar'} la paquetería "${tenant.name}"?`)) {
+const toggleStatus = async (tenant) => {
+    const confirmed = await showConfirm(`¿Estás seguro de ${tenant.status === 'active' ? 'pausar' : 'activar'} la paquetería "${tenant.name}"?`);
+    if (confirmed) {
         router.patch(route('Management.tenants.toggle-status', tenant.id));
     }
 };

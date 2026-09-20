@@ -5,6 +5,9 @@ import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DataTable from '@/Components/DataTable.vue';
 import ModalForm from '@/Components/ModalForm.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showConfirm, showAlert } = useAlert();
 
 const columns = [
     { key: 'codigo', label: 'Código' },
@@ -166,7 +169,8 @@ const submitCatalogo = async () => {
 
 const deleteCatalogo = async (catalogo) => {
     if (!catalogo) return;
-    if (!confirm(`¿Estás seguro de eliminar el catálogo "${catalogo.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const confirmed = await showConfirm(`¿Estás seguro de eliminar el catálogo "${catalogo.nombre}"? Esta acción no se puede deshacer.`);
+    if (!confirmed) return;
     loading.value = true;
     errorMessage.value = '';
     try {
@@ -249,7 +253,8 @@ const submitValor = async () => {
 };
 
 const deleteValor = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar este valor del catálogo?')) return;
+    const confirmed = await showConfirm('¿Estás seguro de eliminar este valor del catálogo?');
+    if (!confirmed) return;
     loading.value = true;
     errorMessage.value = '';
     try {

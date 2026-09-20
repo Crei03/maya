@@ -6,6 +6,9 @@ import DataTable from '@/Components/DataTable.vue';
 import Filters from '@/Components/buttons/Filters.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 const activeSectionTitle = 'Bodegas';
 
@@ -195,13 +198,14 @@ const updateBodega = async () => {
 };
 
 const deleteBodega = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar esta bodega?')) return;
+    const confirmed = await showConfirm('¿Estás seguro de eliminar esta bodega?');
+    if (!confirmed) return;
     try {
         await window.axios.delete(route('admin.bodegas.destroy', { warehouse: id }));
         successMessage.value = 'Bodega eliminada correctamente.';
         await fetchBodegas();
     } catch {
-        alert('No fue posible eliminar la bodega. Intenta nuevamente.');
+        showAlert('No fue posible eliminar la bodega. Intenta nuevamente.');
     }
 };
 

@@ -7,6 +7,9 @@ import AdminLayout from '@/Layouts/AdminLayout.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
 import Excel from '@/Components/buttons/Excel.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 // --- Estado General ---
 const loading = ref(false);
@@ -452,7 +455,8 @@ const saveClient = async () => {
 };
 
 const deleteClient = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar este cliente del directorio?')) return;
+    const confirmed = await showConfirm('¿Estás seguro de eliminar este cliente del directorio?');
+    if (!confirmed) return;
     try {
         await window.axios.delete(route('admin.clients.destroy', { id }));
         delete deliveriesCache[id];
@@ -461,7 +465,7 @@ const deleteClient = async (id) => {
         showMobileDetail.value = false;
         await fetchClients();
     } catch {
-        alert('No fue posible eliminar el cliente.');
+        showAlert('No fue posible eliminar el cliente.');
     }
 };
 

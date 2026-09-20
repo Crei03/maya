@@ -13,6 +13,9 @@ import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { Link, router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import debounce from 'lodash/debounce';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showConfirm } = useAlert();
 
 const props = defineProps({
     posts: Object,
@@ -34,14 +37,16 @@ const debouncedSearch = debounce(() => {
 
 watch([search, status], debouncedSearch);
 
-const togglePublish = (post) => {
-    if (confirm(`¿Estás seguro de ${post.is_published ? 'ocultar' : 'publicar'} el post "${post.title}"?`)) {
+const togglePublish = async (post) => {
+    const confirmed = await showConfirm(`¿Estás seguro de ${post.is_published ? 'ocultar' : 'publicar'} el post "${post.title}"?`);
+    if (confirmed) {
         router.post(route('Management.blog.publish', post.id));
     }
 };
 
-const deletePost = (post) => {
-    if (confirm(`¿Estás seguro de eliminar el post "${post.title}"? Esta acción no se puede deshacer.`)) {
+const deletePost = async (post) => {
+    const confirmed = await showConfirm(`¿Estás seguro de eliminar el post "${post.title}"? Esta acción no se puede deshacer.`);
+    if (confirmed) {
         router.delete(route('Management.blog.destroy', post.id));
     }
 };

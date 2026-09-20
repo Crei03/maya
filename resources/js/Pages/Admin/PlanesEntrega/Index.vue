@@ -5,6 +5,9 @@ import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DataTable from '@/Components/DataTable.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import Modal from '@/Components/Modal.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 // --- Estado de la lista principal ---
 const loading = ref(false);
@@ -583,7 +586,7 @@ const moveDetailStopUp = (index) => {
     const prevItem = items[index - 1];
 
     if (PRIORITY_RANK[currentItem.priority] > PRIORITY_RANK[prevItem.priority]) {
-        alert('Violación de prioridad: No puedes mover una entrega de prioridad menor antes de una mayor.');
+        showAlert('Violación de prioridad: No puedes mover una entrega de prioridad menor antes de una mayor.');
         return;
     }
 
@@ -599,7 +602,7 @@ const moveDetailStopDown = (index) => {
     const nextItem = items[index + 1];
 
     if (PRIORITY_RANK[currentItem.priority] < PRIORITY_RANK[nextItem.priority]) {
-        alert('Violación de prioridad: Una entrega de mayor prioridad no puede quedar después de una menor.');
+        showAlert('Violación de prioridad: Una entrega de mayor prioridad no puede quedar después de una menor.');
         return;
     }
 
@@ -626,7 +629,7 @@ const saveDetailReorder = async () => {
             await fetchTasks(pagination.value?.current_page || 1);
         }
     } catch {
-        alert('Error al guardar el nuevo orden.');
+        showAlert('Error al guardar el nuevo orden.');
     } finally {
         savingReorder.value = false;
     }
@@ -649,7 +652,8 @@ const formatElapsedTime = (startDateStr) => {
 
 // --- Acciones del Ciclo de Vida de Tareas ---
 const confirmStartTask = async (task) => {
-    if (!confirm(`¿Deseas iniciar el plan de entrega "${task.title}"?\nLos paquetes pasarán a estado "En tránsito".`)) {
+    const confirmed = await showConfirm(`¿Deseas iniciar el plan de entrega "${task.title}"?\nLos paquetes pasarán a estado "En tránsito".`);
+    if (!confirmed) {
         return;
     }
     loading.value = true;
@@ -671,7 +675,8 @@ const confirmStartTask = async (task) => {
 };
 
 const confirmCompleteTask = async (task) => {
-    if (!confirm(`¿Deseas finalizar la ruta del plan "${task.title}"?\nSe registrará la hora de término y los paquetes no entregados retornarán al inventario de bodega.`)) {
+    const confirmed = await showConfirm(`¿Deseas finalizar la ruta del plan "${task.title}"?\nSe registrará la hora de término y los paquetes no entregados retornarán al inventario de bodega.`);
+    if (!confirmed) {
         return;
     }
     loading.value = true;
@@ -720,7 +725,7 @@ const submitCancelTask = async () => {
             }
         }
     } catch (err) {
-        alert(err.response?.data?.message || 'Error al cancelar el plan.');
+        showAlert(err.response?.data?.message || 'Error al cancelar el plan.');
     } finally {
         cancellingTask.value = false;
     }
@@ -746,7 +751,7 @@ const markStopDelivered = async (item) => {
             await fetchTasks(pagination.value?.current_page || 1);
         }
     } catch (err) {
-        alert(err.response?.data?.message || 'Error al marcar parada como entregada.');
+        showAlert(err.response?.data?.message || 'Error al marcar parada como entregada.');
     }
 };
 
@@ -786,7 +791,7 @@ const submitReturnStop = async () => {
             await fetchTasks(pagination.value?.current_page || 1);
         }
     } catch (err) {
-        alert(err.response?.data?.message || 'Error al registrar retorno de la parada.');
+        showAlert(err.response?.data?.message || 'Error al registrar retorno de la parada.');
     } finally {
         returningStop.value = false;
     }
@@ -794,7 +799,8 @@ const submitReturnStop = async () => {
 
 const unassignStopFromTask = async (item) => {
     if (!detailTask.value) return;
-    if (!confirm(`¿Remover el paquete ${item.shipment?.tracking_number || ''} de este plan?\nRegresará al inventario disponible en bodega.`)) {
+    const confirmed = await showConfirm(`¿Remover el paquete ${item.shipment?.tracking_number || ''} de este plan?\nRegresará al inventario disponible en bodega.`);
+    if (!confirmed) {
         return;
     }
     try {
@@ -807,7 +813,7 @@ const unassignStopFromTask = async (item) => {
             await fetchTasks(pagination.value?.current_page || 1);
         }
     } catch (err) {
-        alert(err.response?.data?.message || 'Error al desasignar el paquete.');
+        showAlert(err.response?.data?.message || 'Error al desasignar el paquete.');
     }
 };
 

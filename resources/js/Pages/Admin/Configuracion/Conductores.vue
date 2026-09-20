@@ -7,6 +7,9 @@ import Filters from '@/Components/buttons/Filters.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import Modal from '@/Components/Modal.vue';
 import ModalForm from '@/Components/ModalForm.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert } = useAlert();
 
 const activeSectionTitle = 'Conductores';
 
@@ -256,7 +259,7 @@ const confirmDelete = async () => {
         confirmDeleteId.value = null;
         await fetchDrivers();
     } catch {
-        alert('No fue posible eliminar el conductor. Intenta nuevamente.');
+        showAlert('No fue posible eliminar el conductor. Intenta nuevamente.');
         confirmDeleteId.value = null;
     }
 };

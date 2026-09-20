@@ -7,8 +7,10 @@ import Filters from '@/Components/buttons/Filters.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ModalForm from '@/Components/ModalForm.vue';
 import { useDateFormat } from '@/Composables/useDateFormat';
+import { useAlert } from '@/Composables/useAlert';
 
 const { formatDateOnly } = useDateFormat();
+const { showAlert, showConfirm } = useAlert();
 
 const activeSection = ref(null);
 const showFilters = ref(false);
@@ -218,7 +220,8 @@ const updateUser = async () => {
 };
 
 const deleteUser = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar este usuario?')) {
+    const confirmed = await showConfirm('¿Estás seguro de eliminar este usuario?');
+    if (!confirmed) {
         return;
     }
 
@@ -227,7 +230,7 @@ const deleteUser = async (id) => {
         successMessage.value = 'Usuario eliminado correctamente.';
         await fetchUsers();
     } catch (error) {
-        alert('No fue posible eliminar el usuario. Intenta nuevamente.');
+        showAlert('No fue posible eliminar el usuario. Intenta nuevamente.');
     }
 };
 

@@ -10,14 +10,18 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { Link, router } from '@inertiajs/vue3';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showConfirm } = useAlert();
 
 const props = defineProps({
     tenant: Object,
 });
 
-const toggleStatus = () => {
+const toggleStatus = async () => {
     const action = props.tenant.status === 'active' ? 'pausar' : 'activar';
-    if (confirm(`¿Estás seguro de ${action} la paquetería "${props.tenant.name}"?`)) {
+    const confirmed = await showConfirm(`¿Estás seguro de ${action} la paquetería "${props.tenant.name}"?`);
+    if (confirmed) {
         router.patch(route('Management.tenants.toggle-status', props.tenant.id));
     }
 };

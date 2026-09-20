@@ -7,6 +7,9 @@ import RefreshButton from '@/Components/buttons/RefreshButton.vue';
 import ColumnVisibilitySelector from '@/Components/buttons/ColumnVisibilitySelector.vue';
 import Excel from '@/Components/buttons/Excel.vue';
 import Modal from '@/Components/Modal.vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showAlert, showConfirm } = useAlert();
 
 // --- Estado general ---
 const loading = ref(false);
@@ -537,7 +540,8 @@ const handleFormKeydown = (e) => {
 };
 
 const deleteShipment = async (shipment) => {
-    if (!confirm(`¿Estás seguro de eliminar el paquete con tracking ${shipment.tracking_number}?`)) {
+    const confirmed = await showConfirm(`¿Estás seguro de eliminar el paquete con tracking ${shipment.tracking_number}?`);
+    if (!confirmed) {
         return;
     }
 
@@ -548,7 +552,7 @@ const deleteShipment = async (shipment) => {
             await fetchShipments(pagination.value?.current_page || 1);
         }
     } catch (err) {
-        alert(err?.response?.data?.message || 'No fue posible eliminar el paquete (puede tener relaciones activas).');
+        showAlert(err?.response?.data?.message || 'No fue posible eliminar el paquete (puede tener relaciones activas).');
     }
 };
 

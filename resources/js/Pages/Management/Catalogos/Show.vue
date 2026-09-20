@@ -7,6 +7,9 @@ import { faArrowLeft, faGlobe, faBuilding, faPlus, faEdit, faTrash } from '@fort
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
+import { useAlert } from '@/Composables/useAlert';
+
+const { showConfirm } = useAlert();
 
 const props = defineProps({
     catalogo: Object,
@@ -110,8 +113,9 @@ const submitValor = () => {
     }
 };
 
-const deleteValor = (valor) => {
-    if (!confirm(`¿Estás seguro de eliminar el valor "${valor.valor}"?`)) return;
+const deleteValor = async (valor) => {
+    const confirmed = await showConfirm(`¿Estás seguro de eliminar el valor "${valor.valor}"?`);
+    if (!confirmed) return;
 
     router.delete(route('Management.catalogos.valores.destroy', {
         catalogo: props.catalogo.id,
