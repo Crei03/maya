@@ -203,6 +203,8 @@ Route::middleware(['auth', 'tenant', 'gestor'])
                 ->name('admin.drivers.destroy');
 
             // Envíos / Shipments
+            Route::get('/shipments/stats', [ShipmentController::class, 'stats'])
+                ->name('admin.shipments.stats');
             Route::get('/shipments', [ShipmentController::class, 'list'])
                 ->name('admin.shipments.list');
             Route::post('/shipments', [ShipmentController::class, 'store'])

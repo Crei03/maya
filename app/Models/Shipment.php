@@ -251,7 +251,7 @@ class Shipment extends Model
     }
 
     /**
-     * Scope para filtrar por estado concreto (id numérico o código string).
+     * Scope para filtrar por estado concreto (id numérico, código string, array o lista separada por comas).
      */
     public function scopeByStatus($query, $status)
     {
@@ -259,8 +259,14 @@ class Shipment extends Model
             return $query->where('status_id', (int) $status);
         }
 
-        return $query->whereHas('status', function ($q) use ($status) {
-            $q->where('codigo', strtoupper((string) $status));
+        $codes = is_array($status)
+            ? array_map('strtoupper', $status)
+            : (str_contains((string) $status, ',')
+                ? array_map('trim', explode(',', strtoupper((string) $status)))
+                : [strtoupper((string) $status)]);
+
+        return $query->whereHas('status', function ($sub) use ($codes) {
+            $sub->whereIn('codigo', $codes);
         });
     }
 

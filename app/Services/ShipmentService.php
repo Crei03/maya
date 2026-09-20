@@ -8,6 +8,7 @@ use App\Exceptions\ShipmentHasRelationsException;
 use App\Models\Shipment;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 
 class ShipmentService
 {
@@ -211,6 +212,79 @@ class ShipmentService
         }
 
         $shipment->delete();
+    }
+
+    /**
+     * Get shipment statistics/KPIs grouped by status and total.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{total: int, by_status: array<string, int>, summary: array<string, int>}
+     */
+    public function getStats(array $filters = []): array
+    {
+        $baseQuery = Shipment::query();
+
+        if (! empty($filters['warehouse_id'] ?? null)) {
+            $baseQuery->where('warehouse_id', $filters['warehouse_id']);
+        }
+
+        if (! empty($filters['date_from'] ?? null)) {
+            $baseQuery->whereDate('created_at', '>=', $filters['date_from']);
+        }
+
+        if (! empty($filters['date_to'] ?? null)) {
+            $baseQuery->whereDate('created_at', '<=', $filters['date_to']);
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        $catalogoService = app(CatalogoService::class);
+        $statuses = $catalogoService->getValoresBySlug('estado-envio');
+
+        $countsByCode = [];
+        foreach ($statuses as $status) {
+            $countsByCode[$status->codigo] = 0;
+        }
+
+        // Count grouped by status_id
+        $byStatusId = (clone $baseQuery)
+            ->whereNotNull('status_id')
+            ->select('status_id', DB::raw('count(*) as aggregate'))
+            ->groupBy('status_id')
+            ->pluck('aggregate', 'status_id');
+
+        foreach ($byStatusId as $statusId => $count) {
+            $matched = $statuses->firstWhere('id', (int) $statusId);
+            if ($matched) {
+                $countsByCode[$matched->codigo] = ($countsByCode[$matched->codigo] ?? 0) + (int) $count;
+            }
+        }
+
+        $pending = $countsByCode['PENDIENTE'] ?? 0;
+        $inWarehouse = $countsByCode['EN_BODEGA'] ?? 0;
+        $assigned = $countsByCode['ASIGNADO'] ?? 0;
+        $inTransit = $countsByCode['EN_TRANSITO'] ?? 0;
+        $delivered = $countsByCode['ENTREGADO'] ?? 0;
+        $returned = $countsByCode['DEVUELTO'] ?? 0;
+        $failed = $countsByCode['FALLIDO'] ?? 0;
+        $cancelled = $countsByCode['CANCELADO'] ?? 0;
+
+        return [
+            'total' => $total,
+            'by_status' => $countsByCode,
+            'summary' => [
+                'pending' => $pending,
+                'in_warehouse' => $inWarehouse,
+                'assigned' => $assigned,
+                'in_transit' => $inTransit,
+                'active_in_transit' => $assigned + $inTransit,
+                'delivered' => $delivered,
+                'returned' => $returned,
+                'failed' => $failed,
+                'cancelled' => $cancelled,
+                'issues' => $failed + $returned + $cancelled,
+            ],
+        ];
     }
 
     /**

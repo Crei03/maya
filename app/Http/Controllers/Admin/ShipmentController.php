@@ -14,6 +14,7 @@ use App\Services\ShipmentService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,6 +37,22 @@ class ShipmentController extends Controller
             'referenceTypes' => $cs->getValoresBySlug('tipo-referencia'),
             'packageTypes' => $cs->getValoresBySlug('tipo-paquete'),
             'statuses' => $cs->getValoresBySlug('estado-envio'),
+            'initialStats' => $this->service->getStats(),
+        ]);
+    }
+
+    /**
+     * Obtener estadísticas y KPIs de envíos.
+     */
+    public function stats(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', Shipment::class);
+
+        $stats = $this->service->getStats($request->only(['warehouse_id', 'date_from', 'date_to']));
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats,
         ]);
     }
 

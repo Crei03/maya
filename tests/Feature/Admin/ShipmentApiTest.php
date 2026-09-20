@@ -638,4 +638,117 @@ class ShipmentApiTest extends TestCase
             ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.reference_number', 'PED-SPECIAL-777');
     }
+
+    // ============================================================================
+    // Stats & KPI Tests
+    // ============================================================================
+
+    public function test_get_shipments_stats_returns_correct_kpis(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        // 2 Pendientes
+        Shipment::factory()->count(2)->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        // 3 En Bodega
+        Shipment::factory()->count(3)->inWarehouse($warehouse)->create([
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        // 1 En Tránsito
+        Shipment::factory()->inTransit()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        // 2 Entregados
+        Shipment::factory()->count(2)->delivered()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        // 1 Fallido
+        Shipment::factory()->failed()->create([
+            'tenant_id' => $this->tenant->id,
+            'warehouse_id' => $warehouse->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.stats'));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.total', 9)
+            ->assertJsonPath('data.by_status.PENDIENTE', 2)
+            ->assertJsonPath('data.by_status.EN_BODEGA', 3)
+            ->assertJsonPath('data.by_status.EN_TRANSITO', 1)
+            ->assertJsonPath('data.by_status.ENTREGADO', 2)
+            ->assertJsonPath('data.by_status.FALLIDO', 1)
+            ->assertJsonPath('data.summary.pending', 2)
+            ->assertJsonPath('data.summary.in_warehouse', 3)
+            ->assertJsonPath('data.summary.delivered', 2)
+            ->assertJsonPath('data.summary.issues', 1);
+    }
+
+    public function test_get_shipments_stats_scoped_to_current_tenant(): void
+    {
+        // 2 for this tenant
+        Shipment::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
+
+        // 5 for another tenant
+        $otherTenant = Tenant::query()->create([
+            'id' => (string) Str::uuid(),
+            'name' => 'Other Tenant',
+            'slug' => 'other-tenant',
+            'status' => 'active',
+        ]);
+        Shipment::factory()->count(5)->create(['tenant_id' => $otherTenant->id]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.stats'));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.total', 2);
+    }
+
+    public function test_get_shipments_stats_requires_auth(): void
+    {
+        $response = $this->getJson(route('admin.shipments.stats'));
+        $response->assertUnauthorized();
+    }
+
+    public function test_filter_shipments_by_multiple_comma_separated_statuses(): void
+    {
+        $warehouse = Warehouse::factory()->create(['tenant_id' => $this->tenant->id]);
+
+        Shipment::factory()->count(2)->inWarehouse($warehouse)->create(['tenant_id' => $this->tenant->id]);
+        Shipment::factory()->count(3)->inTransit()->create(['tenant_id' => $this->tenant->id]);
+        Shipment::factory()->count(1)->failed()->create(['tenant_id' => $this->tenant->id]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.shipments.list', ['status' => 'EN_BODEGA,FALLIDO']));
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.meta.total', 3);
+    }
+
+    public function test_paquetes_page_renders_with_initial_stats(): void
+    {
+        Shipment::factory()->count(3)->create(['tenant_id' => $this->tenant->id]);
+
+        $response = $this->actingAs($this->gestor)
+            ->get(route('admin.paquetes'));
+
+        $response->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Admin/Paquetes/Index')
+                ->has('initialStats')
+                ->where('initialStats.total', 3)
+            );
+    }
 }
