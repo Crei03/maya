@@ -8,6 +8,7 @@ import ColumnVisibilitySelector from '@/Components/buttons/ColumnVisibilitySelec
 import Excel from '@/Components/buttons/Excel.vue';
 import Modal from '@/Components/Modal.vue';
 import { useAlert } from '@/Composables/useAlert';
+import ShipmentKpiCards from './Components/ShipmentKpiCards.vue';
 
 const { showAlert, showConfirm } = useAlert();
 
@@ -67,6 +68,7 @@ const props = defineProps({
     referenceTypes: { type: Array, default: () => [] },
     packageTypes: { type: Array, default: () => [] },
     statuses: { type: Array, default: () => [] },
+    initialStats: { type: Object, default: () => null },
 });
 
 // --- Opciones de Catálogo Dinámicas ---
@@ -254,7 +256,38 @@ const detailOpen = ref(false);
 const detailShipment = ref(null);
 const loadingDetail = ref(false);
 
-// --- Métodos de Carga ---
+// --- Métodos de Carga y KPIs ---
+const kpiStats = ref(props.initialStats || {
+    total: 0,
+    by_status: {},
+    summary: {},
+});
+const loadingKpis = ref(false);
+
+const fetchKpiStats = async () => {
+    loadingKpis.value = true;
+    try {
+        const params = {};
+        if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+        if (filters.date_from) params.date_from = filters.date_from;
+        if (filters.date_to) params.date_to = filters.date_to;
+
+        const res = await window.axios.get(route('admin.shipments.stats'), { params });
+        if (res.data?.success) {
+            kpiStats.value = res.data.data;
+        }
+    } catch (e) {
+        console.warn('Error al cargar KPIs de envíos:', e);
+    } finally {
+        loadingKpis.value = false;
+    }
+};
+
+const handleSelectKpiStatus = (statusKey) => {
+    filters.status = statusKey;
+    fetchShipments(1);
+};
+
 const fetchShipments = async (page = 1) => {
     loading.value = true;
     errorMessage.value = '';
@@ -269,6 +302,7 @@ const fetchShipments = async (page = 1) => {
             shipments.value = response.data.data.data;
             pagination.value = response.data.data.meta;
         }
+        fetchKpiStats();
     } catch (err) {
         errorMessage.value = 'Error al cargar los envíos.';
     } finally {
@@ -707,6 +741,12 @@ onMounted(async () => {
                             @change="fetchShipments(1)"
                         >
                             <option value="">Todos los estados</option>
+                            <option v-if="filters.status === 'EN_TRANSITO,ASIGNADO'" value="EN_TRANSITO,ASIGNADO">
+                                En Tránsito / Asignados
+                            </option>
+                            <option v-if="filters.status === 'FALLIDO,DEVUELTO,CANCELADO'" value="FALLIDO,DEVUELTO,CANCELADO">
+                                Incidencias (Fallidos / Devueltos / Cancelados)
+                            </option>
                             <option v-for="st in statusOptions" :key="st.value" :value="st.value">
                                 {{ st.label }}
                             </option>
@@ -772,6 +812,14 @@ onMounted(async () => {
                     </div>
                 </div>
             </section>
+
+            <!-- KPI Cards de Estados y Total -->
+            <ShipmentKpiCards
+                :stats="kpiStats"
+                :active-status="filters.status"
+                :loading="loadingKpis"
+                @select-status="handleSelectKpiStatus"
+            />
 
             <!-- Tabla de Envíos -->
             <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
@@ -914,15 +962,6 @@ onMounted(async () => {
                     <!-- Acciones -->
                     <template #cell-actions="{ row }">
                         <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                            <button
-                                type="button"
-                                class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
-                                title="Ver Detalle y Tracking"
-                                @click="openDetailModal(row)"
-                            >
-                                <font-awesome-icon :icon="['fas', 'eye']" />
-                            </button>
-
                             <button
                                 type="button"
                                 class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-xs text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-2xs"
