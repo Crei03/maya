@@ -16,6 +16,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { useTheme } from '@/Composables/useTheme.js';
+import AlertDialog from '@/Components/AlertDialog.vue';
 
 const isMobileMenuOpen = ref(false);
 const user = usePage().props.auth.user;
@@ -218,5 +219,7 @@ const navigation = [
                 </div>
             </main>
         </div>
+
+        <AlertDialog />
     </div>
 </template>

@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue';
 import { Link, usePage, router } from '@inertiajs/vue3';
 import { useTheme } from '@/Composables/useTheme.js';
+import AlertDialog from '@/Components/AlertDialog.vue';
 
 const props = defineProps({
     title: {
@@ -308,5 +309,7 @@ const navigation = [
                 </div>
             </main>
         </div>
+
+        <AlertDialog />
     </div>
 </template>
