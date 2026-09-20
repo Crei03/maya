@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property string $nombre Nombre del catálogo
  * @property string $slug Identificador único del catálogo
+ * @property string $scope Ámbito del catálogo (paqueteria o saas)
  * @property string|null $description Descripción del catálogo
  * @property bool $is_global Si es visible para todos los tenants
  * @property bool $is_active Si el catálogo está activo
@@ -29,6 +30,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Catalogo extends Model
 {
     use HasFactory;
+
+    public const SCOPE_PAQUETERIA = 'paqueteria';
+
+    public const SCOPE_SAAS = 'saas';
 
     /**
      * Nombre de la tabla asociada.
@@ -43,6 +48,7 @@ class Catalogo extends Model
     protected $fillable = [
         'nombre',
         'slug',
+        'scope',
         'description',
         'is_global',
         'is_active',
@@ -95,6 +101,22 @@ class Catalogo extends Model
     }
 
     /**
+     * Scope: Solo catálogos de paquetería (operativos del tenant).
+     */
+    public function scopePaqueteria($query)
+    {
+        return $query->where('scope', self::SCOPE_PAQUETERIA);
+    }
+
+    /**
+     * Scope: Solo catálogos del SaaS (landlord/superadmin).
+     */
+    public function scopeSaas($query)
+    {
+        return $query->where('scope', self::SCOPE_SAAS);
+    }
+
+    /**
      * Scope: Solo catálogos globales.
      */
     public function scopeGlobal($query)
@@ -103,13 +125,14 @@ class Catalogo extends Model
     }
 
     /**
-     * Scope: Catálogos visibles para un tenant (globales + propios).
+     * Scope: Catálogos visibles para un tenant (ámbito paquetería + globales/propios).
      */
     public function scopeVisibleByTenant($query, ?string $tenantId)
     {
-        return $query->where(function ($q) use ($tenantId) {
-            $q->where('is_global', true)
-                ->orWhere('tenant_id', $tenantId);
-        });
+        return $query->where('scope', self::SCOPE_PAQUETERIA)
+            ->where(function ($q) use ($tenantId) {
+                $q->where('is_global', true)
+                    ->orWhere('tenant_id', $tenantId);
+            });
     }
 }

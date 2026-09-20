@@ -20,6 +20,7 @@ class UpdateCatalogoRequest extends FormRequest
 
         return [
             'nombre' => ['required', 'string', 'max:255', Rule::unique('catalogos', 'nombre')->ignore($catalogoId)],
+            'scope' => ['nullable', 'string', Rule::in([\App\Models\Catalogo::SCOPE_PAQUETERIA, \App\Models\Catalogo::SCOPE_SAAS])],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],

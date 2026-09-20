@@ -78,4 +78,62 @@ class CatalogoTest extends TestCase
         $this->assertTrue($result->contains('id', $global->id));
         $this->assertTrue($result->contains('id', $tenantOwned->id));
     }
+
+    public function test_scope_paqueteria_and_scope_saas_filter_correctly(): void
+    {
+        Catalogo::query()->create([
+            'nombre' => 'Operational Catalog',
+            'slug' => 'operational-catalog',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => true,
+        ]);
+
+        Catalogo::query()->create([
+            'nombre' => 'SaaS Catalog',
+            'slug' => 'saas-catalog',
+            'scope' => Catalogo::SCOPE_SAAS,
+            'is_global' => true,
+        ]);
+
+        $paqueteriaResult = Catalogo::query()->paqueteria()->get();
+        $saasResult = Catalogo::query()->saas()->get();
+
+        $this->assertCount(1, $paqueteriaResult);
+        $this->assertSame('operational-catalog', $paqueteriaResult->first()->slug);
+
+        $this->assertCount(1, $saasResult);
+        $this->assertSame('saas-catalog', $saasResult->first()->slug);
+    }
+
+    public function test_scope_visible_by_tenant_excludes_saas_catalogos(): void
+    {
+        $tenant = $this->createTenant('tenant-x');
+
+        Catalogo::query()->create([
+            'nombre' => 'Operational Global',
+            'slug' => 'op-global',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => true,
+        ]);
+
+        Catalogo::query()->create([
+            'nombre' => 'Operational Tenant',
+            'slug' => 'op-tenant',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $tenant->id,
+        ]);
+
+        Catalogo::query()->create([
+            'nombre' => 'SaaS Platform Catalog',
+            'slug' => 'saas-platform',
+            'scope' => Catalogo::SCOPE_SAAS,
+            'is_global' => true,
+        ]);
+
+        $result = Catalogo::query()->visibleByTenant($tenant->id)->get();
+
+        $this->assertCount(2, $result);
+        $this->assertFalse($result->contains('slug', 'saas-platform'));
+    }
 }

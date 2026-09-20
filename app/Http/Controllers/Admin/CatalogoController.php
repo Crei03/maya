@@ -19,13 +19,10 @@ class CatalogoController extends Controller
         $tenantId = Tenant::current()?->id;
 
         $catalogos = Catalogo::query()
-            ->where(function ($q) use ($tenantId) {
-                $q->where('is_global', true)
-                    ->orWhere('tenant_id', $tenantId);
-            })
+            ->visibleByTenant($tenantId)
             ->withCount('valores')
             ->orderBy('nombre')
-            ->get(['id', 'nombre', 'slug', 'is_global']);
+            ->get(['id', 'nombre', 'slug', 'is_global', 'description']);
 
         return response()->json([
             'success' => true,
@@ -38,11 +35,8 @@ class CatalogoController extends Controller
         $tenantId = Tenant::current()?->id;
 
         $catalogo = Catalogo::query()
+            ->visibleByTenant($tenantId)
             ->where('slug', $slug)
-            ->where(function ($q) use ($tenantId) {
-                $q->where('is_global', true)
-                    ->orWhere('tenant_id', $tenantId);
-            })
             ->firstOrFail();
 
         $valores = CatalogoValor::query()

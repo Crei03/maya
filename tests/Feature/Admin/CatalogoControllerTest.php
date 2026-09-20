@@ -58,6 +58,45 @@ class CatalogoControllerTest extends TestCase
         $response->assertJsonCount(1, 'data');
     }
 
+    public function test_index_does_not_return_saas_catalogos_to_tenant(): void
+    {
+        Catalogo::query()->create([
+            'nombre' => 'Operational Catalog',
+            'slug' => 'operational-cat',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => true,
+        ]);
+
+        Catalogo::query()->create([
+            'nombre' => 'Tenant Status Catalog',
+            'slug' => 'estado-tenant',
+            'scope' => Catalogo::SCOPE_SAAS,
+            'is_global' => true,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.configuracion.catalogos.index'));
+
+        $response->assertOk();
+        $response->assertJsonCount(1, 'data');
+        $response->assertJsonPath('data.0.slug', 'operational-cat');
+    }
+
+    public function test_show_returns_404_for_saas_catalogos_to_tenant(): void
+    {
+        Catalogo::query()->create([
+            'nombre' => 'Tenant Status Catalog',
+            'slug' => 'estado-tenant',
+            'scope' => Catalogo::SCOPE_SAAS,
+            'is_global' => true,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->getJson(route('admin.configuracion.catalogos.show', ['slug' => 'estado-tenant']));
+
+        $response->assertNotFound();
+    }
+
     public function test_show_returns_valores_by_slug(): void
     {
         $catalogo = Catalogo::query()->create([

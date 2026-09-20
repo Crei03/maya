@@ -12,22 +12,22 @@ class CatalogoSeeder extends Seeder
     {
         $residencia = Catalogo::query()->updateOrCreate(
             ['slug' => 'residencia'],
-            ['nombre' => 'Residencia', 'is_global' => true, 'tenant_id' => null]
+            ['nombre' => 'Residencia', 'scope' => Catalogo::SCOPE_PAQUETERIA, 'is_global' => true, 'tenant_id' => null]
         );
 
         $provincia = Catalogo::query()->updateOrCreate(
             ['slug' => 'provincia'],
-            ['nombre' => 'Provincia', 'is_global' => true, 'tenant_id' => null]
+            ['nombre' => 'Provincia', 'scope' => Catalogo::SCOPE_PAQUETERIA, 'is_global' => true, 'tenant_id' => null]
         );
 
         $distrito = Catalogo::query()->updateOrCreate(
             ['slug' => 'distrito'],
-            ['nombre' => 'Distrito', 'is_global' => true, 'tenant_id' => null]
+            ['nombre' => 'Distrito', 'scope' => Catalogo::SCOPE_PAQUETERIA, 'is_global' => true, 'tenant_id' => null]
         );
 
         $calle = Catalogo::query()->updateOrCreate(
             ['slug' => 'calle'],
-            ['nombre' => 'Calle', 'is_global' => true, 'tenant_id' => null]
+            ['nombre' => 'Calle', 'scope' => Catalogo::SCOPE_PAQUETERIA, 'is_global' => true, 'tenant_id' => null]
         );
 
         foreach ([
@@ -229,6 +229,7 @@ class CatalogoSeeder extends Seeder
             [
                 'slug' => 'estado-tenant',
                 'nombre' => 'Estado de Tenant / Paquetería',
+                'scope' => Catalogo::SCOPE_SAAS,
                 'description' => 'Estado de cuenta de la empresa en el SaaS',
                 'valores' => [
                     ['codigo' => 'ACTIVO', 'valor' => 'Activo', 'metadata' => ['color' => 'green']],
@@ -256,6 +257,7 @@ class CatalogoSeeder extends Seeder
                 ['slug' => $catalog['slug']],
                 [
                     'nombre' => $catalog['nombre'],
+                    'scope' => $catalog['scope'] ?? Catalogo::SCOPE_PAQUETERIA,
                     'description' => $catalog['description'] ?? null,
                     'is_global' => true,
                     'tenant_id' => null,

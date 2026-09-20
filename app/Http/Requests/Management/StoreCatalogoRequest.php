@@ -19,6 +19,7 @@ class StoreCatalogoRequest extends FormRequest
         return [
             'nombre' => ['required', 'string', 'max:255', 'unique:catalogos,nombre'],
             'slug' => ['required', 'string', 'max:100', 'unique:catalogos,slug', 'regex:/^[a-z0-9-]+$/'],
+            'scope' => ['nullable', 'string', Rule::in([\App\Models\Catalogo::SCOPE_PAQUETERIA, \App\Models\Catalogo::SCOPE_SAAS])],
             'description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
             'sort_order' => ['integer', 'min:0'],
@@ -51,6 +52,10 @@ class StoreCatalogoRequest extends FormRequest
     {
         if ($this->input('is_global') === true || $this->input('is_global') === '1') {
             $this->merge(['tenant_id' => null]);
+        }
+
+        if (! $this->has('scope') || empty($this->input('scope'))) {
+            $this->merge(['scope' => \App\Models\Catalogo::SCOPE_PAQUETERIA]);
         }
     }
 }

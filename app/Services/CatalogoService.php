@@ -10,9 +10,10 @@ use Illuminate\Database\Eloquent\Collection;
 
 class CatalogoService
 {
-    public function getVisibleCatalogos(?string $tenantId): Collection
+    public function getVisibleCatalogos(?string $tenantId, string $scope = Catalogo::SCOPE_PAQUETERIA): Collection
     {
         return Catalogo::query()
+            ->where('scope', $scope)
             ->where(function ($q) use ($tenantId) {
                 $q->where('is_global', true)
                     ->orWhere('tenant_id', $tenantId);
