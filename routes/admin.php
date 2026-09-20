@@ -82,6 +82,9 @@ Route::middleware(['auth', 'tenant', 'gestor'])
 
         Route::prefix('api/catalogos')->name('admin.configuracion.catalogos.')->group(function () {
             Route::get('/', [CatalogoController::class, 'index'])->name('index');
+            Route::post('/', [CatalogoController::class, 'storeCatalogo'])->name('store');
+            Route::put('{id}', [CatalogoController::class, 'updateCatalogo'])->name('update')->whereNumber('id');
+            Route::delete('{id}', [CatalogoController::class, 'destroyCatalogo'])->name('destroy')->whereNumber('id');
             Route::get('{slug}', [CatalogoController::class, 'show'])->name('show');
             Route::post('valores', [CatalogoController::class, 'store'])->name('valores.store');
             Route::put('valores/{id}', [CatalogoController::class, 'update'])->name('valores.update');

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DataTable from '@/Components/DataTable.vue';
@@ -14,27 +14,62 @@ const columns = [
 ];
 
 const loading = ref(false);
-const saving = ref(false);
 const catalogos = ref([]);
 const valores = ref([]);
 const selectedCatalogo = ref(null);
 const successMessage = ref('');
 const errorMessage = ref('');
-const errors = ref({});
 
 // Left panel search filter
 const catalogSearch = ref('');
 
-// Valor CRUD modal
-const modalOpen = ref(false);
-const editingId = ref(null);
+// --- Modal & Form: CATÁLOGO ---
+const catalogoModalOpen = ref(false);
+const editingCatalogoId = ref(null);
+const catalogoSaving = ref(false);
+const catalogoErrors = ref({});
+const catalogoForm = reactive({
+    nombre: '',
+    slug: '',
+    description: '',
+});
 
-const form = reactive({
+const catalogoFields = computed(() => [
+    { key: 'nombre', label: 'Nombre del Catálogo *', type: 'text', placeholder: 'Ej: Tipo de Prioridad' },
+    { key: 'slug', label: 'Slug / Identificador *', type: 'text', placeholder: 'Ej: tipo-prioridad' },
+    { key: 'description', label: 'Descripción (Opcional)', type: 'text', placeholder: 'Describe el propósito de este catálogo...' },
+]);
+
+// Auto-generar slug en nuevo catálogo
+watch(() => catalogoForm.nombre, (val) => {
+    if (!editingCatalogoId.value && val) {
+        catalogoForm.slug = val
+            .toLowerCase()
+            .trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+    }
+});
+
+// --- Modal & Form: VALOR DEL CATÁLOGO ---
+const valorModalOpen = ref(false);
+const editingValorId = ref(null);
+const valorSaving = ref(false);
+const valorErrors = ref({});
+const valorForm = reactive({
     catalogo_id: '',
     codigo: '',
     valor: '',
     is_active: true,
 });
+
+const valorFields = computed(() => [
+    { key: 'codigo', label: 'Código *', type: 'text', placeholder: 'Ej: URG, RET, EST-01' },
+    { key: 'valor', label: 'Valor / Nombre *', type: 'text', placeholder: 'Nombre descriptivo del valor' },
+    { key: 'is_active', label: 'Activo', type: 'switch' },
+]);
 
 const filteredCatalogos = computed(() => {
     if (!catalogSearch.value) return catalogos.value;
@@ -53,35 +88,185 @@ const selectCatalogo = async (catalogo) => {
     await fetchValores(catalogo.slug);
 };
 
-const resetForm = () => {
-    Object.assign(form, {
-        catalogo_id: selectedCatalogo.value?.id || '',
-        codigo: '',
-        valor: '',
-        is_active: true,
-    });
-    errors.value = {};
-    editingId.value = null;
+// --- CRUD: CATÁLOGO ---
+const openCreateCatalogoModal = () => {
+    editingCatalogoId.value = null;
+    catalogoForm.nombre = '';
+    catalogoForm.slug = '';
+    catalogoForm.description = '';
+    catalogoErrors.value = {};
+    catalogoModalOpen.value = true;
 };
 
-const openCreateModal = () => {
-    resetForm();
-    form.catalogo_id = selectedCatalogo.value?.id || '';
-    modalOpen.value = true;
+const openEditCatalogoModal = () => {
+    if (!selectedCatalogo.value) return;
+    editingCatalogoId.value = selectedCatalogo.value.id;
+    catalogoForm.nombre = selectedCatalogo.value.nombre;
+    catalogoForm.slug = selectedCatalogo.value.slug;
+    catalogoForm.description = selectedCatalogo.value.description || '';
+    catalogoErrors.value = {};
+    catalogoModalOpen.value = true;
 };
 
-const openEditModal = (valor) => {
-    editingId.value = valor.id;
-    form.catalogo_id = selectedCatalogo.value?.id || '';
-    form.codigo = valor.codigo;
-    form.valor = valor.valor;
-    form.is_active = Boolean(valor.is_active);
-    errors.value = {};
-    modalOpen.value = true;
+const closeCatalogoModal = () => {
+    catalogoModalOpen.value = false;
 };
 
-const closeModal = () => {
-    modalOpen.value = false;
+const submitCatalogo = async () => {
+    catalogoSaving.value = true;
+    catalogoErrors.value = {};
+    errorMessage.value = '';
+    try {
+        if (editingCatalogoId.value) {
+            const res = await window.axios.put(
+                route('admin.configuracion.catalogos.update', { id: editingCatalogoId.value }),
+                {
+                    nombre: catalogoForm.nombre,
+                    description: catalogoForm.description,
+                },
+            );
+            successMessage.value = 'Catálogo actualizado correctamente.';
+            catalogoModalOpen.value = false;
+            const updated = res.data?.data;
+            await fetchCatalogos(true);
+            if (updated && selectedCatalogo.value?.id === updated.id) {
+                selectedCatalogo.value.nombre = updated.nombre;
+                selectedCatalogo.value.description = updated.description;
+            }
+        } else {
+            const res = await window.axios.post(
+                route('admin.configuracion.catalogos.store'),
+                {
+                    nombre: catalogoForm.nombre,
+                    slug: catalogoForm.slug,
+                    description: catalogoForm.description,
+                },
+            );
+            successMessage.value = 'Catálogo creado correctamente.';
+            catalogoModalOpen.value = false;
+            const created = res.data?.data;
+            await fetchCatalogos(false);
+            if (created) {
+                const found = catalogos.value.find((c) => c.id === created.id);
+                if (found) {
+                    await selectCatalogo(found);
+                }
+            }
+        }
+    } catch (error) {
+        if (error?.response?.status === 422) {
+            catalogoErrors.value = error.response.data.errors || {};
+            return;
+        }
+        errorMessage.value = error?.response?.data?.message || 'Error al guardar el catálogo.';
+    } finally {
+        catalogoSaving.value = false;
+    }
+};
+
+const deleteCatalogo = async (catalogo) => {
+    if (!catalogo) return;
+    if (!confirm(`¿Estás seguro de eliminar el catálogo "${catalogo.nombre}"? Esta acción no se puede deshacer.`)) return;
+    loading.value = true;
+    errorMessage.value = '';
+    try {
+        const res = await window.axios.delete(
+            route('admin.configuracion.catalogos.destroy', { id: catalogo.id }),
+        );
+        successMessage.value = res.data?.message || 'Catálogo eliminado correctamente.';
+        selectedCatalogo.value = null;
+        valores.value = [];
+        await fetchCatalogos(false);
+    } catch (error) {
+        errorMessage.value = error?.response?.data?.message || 'No fue posible eliminar el catálogo.';
+    } finally {
+        loading.value = false;
+    }
+};
+
+// --- CRUD: VALORES ---
+const openCreateValorModal = () => {
+    if (!selectedCatalogo.value) return;
+    editingValorId.value = null;
+    valorForm.catalogo_id = selectedCatalogo.value.id;
+    valorForm.codigo = '';
+    valorForm.valor = '';
+    valorForm.is_active = true;
+    valorErrors.value = {};
+    valorModalOpen.value = true;
+};
+
+const openEditValorModal = (valor) => {
+    editingValorId.value = valor.id;
+    valorForm.catalogo_id = selectedCatalogo.value?.id || '';
+    valorForm.codigo = valor.codigo;
+    valorForm.valor = valor.valor;
+    valorForm.is_active = Boolean(valor.is_active);
+    valorErrors.value = {};
+    valorModalOpen.value = true;
+};
+
+const closeValorModal = () => {
+    valorModalOpen.value = false;
+};
+
+const submitValor = async () => {
+    valorSaving.value = true;
+    valorErrors.value = {};
+    errorMessage.value = '';
+    try {
+        if (editingValorId.value) {
+            await window.axios.put(
+                route('admin.configuracion.catalogos.valores.update', { id: editingValorId.value }),
+                { ...valorForm },
+            );
+            successMessage.value = 'Valor actualizado correctamente.';
+        } else {
+            await window.axios.post(
+                route('admin.configuracion.catalogos.valores.store'),
+                { ...valorForm },
+            );
+            successMessage.value = 'Valor creado correctamente.';
+        }
+        valorModalOpen.value = false;
+        if (selectedCatalogo.value) {
+            await fetchValores(selectedCatalogo.value.slug);
+            const res = await window.axios.get(route('admin.configuracion.catalogos.index'));
+            catalogos.value = res.data?.data || [];
+        }
+    } catch (error) {
+        if (error?.response?.status === 422) {
+            valorErrors.value = error.response.data.errors || {};
+            if (error.response.data.message) {
+                valorErrors.value = { ...valorErrors.value, form: [error.response.data.message] };
+            }
+            return;
+        }
+        errorMessage.value = error?.response?.data?.message || 'Error al guardar el valor.';
+    } finally {
+        valorSaving.value = false;
+    }
+};
+
+const deleteValor = async (id) => {
+    if (!confirm('¿Estás seguro de eliminar este valor del catálogo?')) return;
+    loading.value = true;
+    errorMessage.value = '';
+    try {
+        const res = await window.axios.delete(
+            route('admin.configuracion.catalogos.valores.destroy', { id }),
+        );
+        successMessage.value = res.data?.message || 'Valor eliminado correctamente.';
+        if (selectedCatalogo.value) {
+            await fetchValores(selectedCatalogo.value.slug);
+            const resCat = await window.axios.get(route('admin.configuracion.catalogos.index'));
+            catalogos.value = resCat.data?.data || [];
+        }
+    } catch (error) {
+        errorMessage.value = error?.response?.data?.message || 'No fue posible eliminar el valor.';
+    } finally {
+        loading.value = false;
+    }
 };
 
 const fetchCatalogos = async (preserveSelected = true) => {
@@ -135,55 +320,6 @@ const refreshData = async () => {
     }
 };
 
-const submitValor = async () => {
-    saving.value = true;
-    errors.value = {};
-    errorMessage.value = '';
-    try {
-        if (editingId.value) {
-            await window.axios.put(
-                route('admin.configuracion.catalogos.valores.update', { id: editingId.value }),
-                { ...form },
-            );
-            successMessage.value = 'Valor actualizado correctamente.';
-        } else {
-            await window.axios.post(
-                route('admin.configuracion.catalogos.valores.store'),
-                { ...form },
-            );
-            successMessage.value = 'Valor creado correctamente.';
-        }
-        closeModal();
-        if (selectedCatalogo.value) {
-            await fetchValores(selectedCatalogo.value.slug);
-        }
-    } catch (error) {
-        if (error?.response?.status === 422) {
-            errors.value = error.response.data.errors || {};
-            if (error.response.data.message) {
-                errors.value = { ...errors.value, form: [error.response.data.message] };
-            }
-            return;
-        }
-        errorMessage.value = 'Error al guardar el valor. Intente nuevamente.';
-    } finally {
-        saving.value = false;
-    }
-};
-
-const deleteValor = async (id) => {
-    if (!confirm('¿Estás seguro de eliminar este valor?')) return;
-    try {
-        await window.axios.delete(route('admin.configuracion.catalogos.valores.destroy', { id }));
-        successMessage.value = 'Valor eliminado correctamente.';
-        if (selectedCatalogo.value) {
-            await fetchValores(selectedCatalogo.value.slug);
-        }
-    } catch {
-        alert('No fue posible eliminar el valor. Intenta nuevamente.');
-    }
-};
-
 onMounted(async () => {
     await fetchCatalogos(false);
 });
@@ -206,24 +342,15 @@ onMounted(async () => {
                         <font-awesome-icon :icon="['fas', 'arrow-left']" />
                     </button>
                     <div>
-                        <h1 class="text-lg font-bold text-[var(--maya-text-main)]">Gestión de Catálogos</h1>
+                        <h1 class="text-lg font-bold text-[var(--maya-text-main)]">Gestión de Catálogos y Clasificaciones</h1>
                         <p class="text-xs text-[var(--maya-text-muted)]">
-                            Administración centralizada de valores y clasificaciones operativas de la paquetería.
+                            Administración centralizada de catálogos operativos y sus valores configurables.
                         </p>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-2">
                     <RefreshButton :loading="loading" @refresh="refreshData" />
-                    <button
-                        v-if="selectedCatalogo"
-                        type="button"
-                        class="inline-flex items-center gap-2 rounded-lg bg-[var(--maya-primary)] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition-colors"
-                        @click="openCreateModal"
-                    >
-                        <font-awesome-icon :icon="['fas', 'plus']" />
-                        Nuevo Valor
-                    </button>
                 </div>
             </div>
 
@@ -232,7 +359,7 @@ onMounted(async () => {
                 <div class="flex items-start gap-3">
                     <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mt-0.5 text-amber-600 dark:text-amber-400" />
                     <p class="text-xs text-amber-900 dark:text-amber-200">
-                        <strong>ADVERTENCIA:</strong> Los valores aquí definidos regulan el ciclo de vida de envíos, rutas, incidentes y clasificaciones. Asegúrate de tener autorización antes de modificarlos.
+                        <strong>ADVERTENCIA:</strong> Los catálogos y sus valores regulan los estados y flujos de envíos y rutas. La eliminación de registros en uso está restringida por integridad referencial.
                     </p>
                 </div>
             </div>
@@ -261,10 +388,33 @@ onMounted(async () => {
             <!-- Panel Maestro-Detalle Dividido -->
             <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
                 
-                <!-- Panel Izquierdo: Lista de Catálogos -->
+                <!-- ========================================== -->
+                <!-- PANEL IZQUIERDO: LISTA DE CATÁLOGOS        -->
+                <!-- ========================================== -->
                 <div class="lg:col-span-4 xl:col-span-4 border-r border-[var(--maya-border)] flex flex-col bg-[var(--maya-bg-surface)]">
-                    <!-- Buscador en tiempo real -->
+                    <!-- Cabecera de Catálogos con botón de Crear Catálogo -->
                     <div class="p-3 border-b border-[var(--maya-border)] space-y-2.5 bg-[var(--maya-bg-base)]">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold uppercase tracking-wider text-[var(--maya-text-main)]">
+                                    Catálogos
+                                </span>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]">
+                                    {{ filteredCatalogos.length }}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--maya-primary)] px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition-colors"
+                                title="Crear un nuevo catálogo"
+                                @click="openCreateCatalogoModal"
+                            >
+                                <font-awesome-icon :icon="['fas', 'plus']" class="text-[11px]" />
+                                Nuevo Catálogo
+                            </button>
+                        </div>
+
+                        <!-- Buscador de catálogos -->
                         <div class="relative">
                             <font-awesome-icon :icon="['fas', 'magnifying-glass']" class="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--maya-text-muted)]" />
                             <input
@@ -282,12 +432,9 @@ onMounted(async () => {
                                 <font-awesome-icon :icon="['fas', 'xmark']" />
                             </button>
                         </div>
-                        <div class="flex items-center justify-between text-[11px] text-[var(--maya-text-muted)] px-1">
-                            <span>{{ filteredCatalogos.length }} catálogos disponibles</span>
-                        </div>
                     </div>
 
-                    <!-- Lista con scroll propio -->
+                    <!-- Lista de Catálogos con scroll propio -->
                     <div class="flex-1 overflow-y-auto divide-y divide-[var(--maya-border)] max-h-[580px] lg:max-h-[calc(100vh-270px)]">
                         <div v-if="loading && !catalogos.length" class="p-8 text-center text-xs text-[var(--maya-text-muted)]">
                             <font-awesome-icon :icon="['fas', 'spinner']" class="fa-spin text-base mb-2" />
@@ -309,10 +456,15 @@ onMounted(async () => {
                             @click="selectCatalogo(catalogo)"
                         >
                             <div class="min-w-0 pr-2">
-                                <p class="text-xs font-semibold text-[var(--maya-text-main)] truncate group-hover:text-[var(--maya-primary)]">
-                                    {{ catalogo.nombre }}
-                                </p>
-                                <p class="text-[11px] text-[var(--maya-text-muted)] font-mono truncate">
+                                <div class="flex items-center gap-1.5">
+                                    <p class="text-xs font-semibold text-[var(--maya-text-main)] truncate group-hover:text-[var(--maya-primary)]">
+                                        {{ catalogo.nombre }}
+                                    </p>
+                                    <span v-if="!catalogo.is_global" class="inline-flex text-[9px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-medium">
+                                        Propio
+                                    </span>
+                                </div>
+                                <p class="text-[11px] text-[var(--maya-text-muted)] font-mono truncate mt-0.5">
                                     {{ catalogo.slug }}
                                 </p>
                             </div>
@@ -328,106 +480,179 @@ onMounted(async () => {
                     </div>
                 </div>
 
-                <!-- Panel Derecho: Detalle de Valores -->
-                <div class="lg:col-span-8 xl:col-span-8 flex flex-col p-4 bg-[var(--maya-bg-surface)]">
-                    <!-- Cabecera del catálogo seleccionado -->
-                    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--maya-border)]">
-                        <div v-if="selectedCatalogo">
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-sm font-bold text-[var(--maya-text-main)]">{{ selectedCatalogo.nombre }}</h2>
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)] border border-[var(--maya-border)]">
-                                    {{ selectedCatalogo.slug }}
-                                </span>
+                <!-- ========================================== -->
+                <!-- PANEL DERECHO: DETALLE Y VALORES          -->
+                <!-- ========================================== -->
+                <div class="lg:col-span-8 xl:col-span-8 flex flex-col p-5 bg-[var(--maya-bg-surface)] space-y-6">
+                    
+                    <!-- SECCIÓN 1: FICHA Y ACCIONES DEL CATÁLOGO -->
+                    <div v-if="selectedCatalogo" class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-base)] p-4 shadow-sm">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="flex flex-wrap items-center gap-2 mb-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-[var(--maya-primary)] bg-[var(--maya-primary-alpha)] px-2 py-0.5 rounded-md">
+                                        Catálogo
+                                    </span>
+                                    <span
+                                        class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium"
+                                        :class="selectedCatalogo.is_global
+                                            ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                            : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200'"
+                                    >
+                                        {{ selectedCatalogo.is_global ? 'Base del Sistema' : 'Catálogo Personalizado' }}
+                                    </span>
+                                    <span class="font-mono text-[11px] text-[var(--maya-text-muted)] bg-[var(--maya-bg-surface)] px-2 py-0.5 rounded border border-[var(--maya-border)]">
+                                        slug: {{ selectedCatalogo.slug }}
+                                    </span>
+                                </div>
+                                <h2 class="text-base font-bold text-[var(--maya-text-main)] truncate">
+                                    {{ selectedCatalogo.nombre }}
+                                </h2>
+                                <p class="text-xs text-[var(--maya-text-muted)] mt-1">
+                                    {{ selectedCatalogo.description || 'Sin descripción especificada para este catálogo.' }}
+                                </p>
                             </div>
-                            <p class="text-xs text-[var(--maya-text-muted)] mt-1">
-                                {{ selectedCatalogo.description || 'Gestión de valores y códigos del catálogo.' }}
-                            </p>
-                        </div>
-                        <div v-else class="text-sm text-[var(--maya-text-muted)]">
-                            Selecciona un catálogo del panel izquierdo para gestionar sus valores.
-                        </div>
 
-                        <div class="flex items-center gap-2">
+                            <!-- Botones de Acción del Catálogo -->
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition-colors"
+                                    title="Editar catálogo"
+                                    @click="openEditCatalogoModal"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'pencil']" class="text-xs text-[var(--maya-text-muted)]" />
+                                    Editar Catálogo
+                                </button>
+                                <button
+                                    v-if="!selectedCatalogo.is_global"
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30 px-3 py-1.5 text-xs font-semibold text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                                    title="Eliminar catálogo"
+                                    @click="deleteCatalogo(selectedCatalogo)"
+                                >
+                                    <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
+                                    Eliminar Catálogo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECCIÓN 2: VALORES DEL CATÁLOGO SELECCIONADO -->
+                    <div class="flex-1 flex flex-col min-h-0">
+                        <!-- Cabecera de Valores -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[var(--maya-border)]">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-bold text-[var(--maya-text-main)]">
+                                        Valores del Catálogo
+                                    </h3>
+                                    <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)]">
+                                        {{ valores.length }} valores
+                                    </span>
+                                </div>
+                                <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
+                                    Opciones, códigos y estados asignados al catálogo {{ selectedCatalogo?.nombre || '' }}.
+                                </p>
+                            </div>
+
                             <button
                                 v-if="selectedCatalogo"
                                 type="button"
                                 class="inline-flex items-center gap-2 rounded-lg bg-[var(--maya-primary)] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[var(--maya-primary-dark)] transition-colors"
-                                @click="openCreateModal"
+                                @click="openCreateValorModal"
                             >
                                 <font-awesome-icon :icon="['fas', 'plus']" />
                                 Nuevo Valor
                             </button>
                         </div>
-                    </div>
 
-                    <!-- DataTable de Valores -->
-                    <div class="mt-4 flex-1">
-                        <DataTable
-                            :columns="columns"
-                            :rows="valores"
-                            :loading="loading"
-                            empty-text="No hay valores registrados en este catálogo."
-                        >
-                            <template #cell-codigo="{ row }">
-                                <span class="font-mono text-xs font-bold text-[var(--maya-text-main)]">{{ row.codigo }}</span>
-                            </template>
-                            <template #cell-valor="{ row }">
-                                <span class="text-xs font-medium text-[var(--maya-text-main)]">{{ row.valor }}</span>
-                            </template>
-                            <template #cell-is_active="{ row }">
-                                <span
-                                    class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                                    :class="row.is_active
-                                        ? 'bg-[var(--maya-success-alpha)] text-[var(--maya-success-dark)]'
-                                        : 'bg-[var(--maya-danger-alpha)] text-[var(--maya-danger-dark)]'"
-                                >
-                                    {{ row.is_active ? 'Activo' : 'Inactivo' }}
-                                </span>
-                            </template>
-                            <template #cell-actions="{ row }">
-                                <div class="flex items-center gap-1.5">
-                                    <button
-                                        type="button"
-                                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-[var(--maya-text-muted)] hover:border-[var(--maya-primary)] hover:text-[var(--maya-primary)] transition-colors"
-                                        title="Editar"
-                                        @click="openEditModal(row)"
+                        <!-- DataTable de Valores -->
+                        <div class="mt-4 flex-1">
+                            <DataTable
+                                :columns="columns"
+                                :rows="valores"
+                                :loading="loading"
+                                empty-text="No hay valores registrados en este catálogo."
+                            >
+                                <template #cell-codigo="{ row }">
+                                    <span class="font-mono text-xs font-bold text-[var(--maya-text-main)] bg-[var(--maya-hover-surface)] px-2 py-0.5 rounded border border-[var(--maya-border)]">
+                                        {{ row.codigo }}
+                                    </span>
+                                </template>
+                                <template #cell-valor="{ row }">
+                                    <span class="text-xs font-medium text-[var(--maya-text-main)]">{{ row.valor }}</span>
+                                </template>
+                                <template #cell-is_active="{ row }">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                                        :class="row.is_active
+                                            ? 'bg-[var(--maya-success-alpha)] text-[var(--maya-success-dark)]'
+                                            : 'bg-[var(--maya-danger-alpha)] text-[var(--maya-danger-dark)]'"
                                     >
-                                        <font-awesome-icon :icon="['fas', 'pencil']" class="text-xs" />
-                                    </button>
-                                    <button
-                                        v-if="row.tenant_id"
-                                        type="button"
-                                        class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-[var(--maya-text-muted)] hover:border-[var(--maya-danger)] hover:text-[var(--maya-danger)] transition-colors"
-                                        title="Eliminar"
-                                        @click="deleteValor(row.id)"
-                                    >
-                                        <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
-                                    </button>
-                                </div>
-                            </template>
-                        </DataTable>
+                                        {{ row.is_active ? 'Activo' : 'Inactivo' }}
+                                    </span>
+                                </template>
+                                <template #cell-actions="{ row }">
+                                    <div class="flex items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--maya-border)] text-[var(--maya-text-muted)] hover:border-[var(--maya-primary)] hover:text-[var(--maya-primary)] transition-colors"
+                                            title="Editar valor"
+                                            @click="openEditValorModal(row)"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'pencil']" class="text-xs" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 dark:border-red-900/50 text-red-500 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                            title="Eliminar valor del catálogo"
+                                            @click="deleteValor(row.id)"
+                                        >
+                                            <font-awesome-icon :icon="['fas', 'trash']" class="text-xs" />
+                                        </button>
+                                    </div>
+                                </template>
+                            </DataTable>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Modal Crear/Editar Valor -->
+        <!-- ========================================== -->
+        <!-- MODAL 1: CREAR / EDITAR CATÁLOGO           -->
+        <!-- ========================================== -->
         <ModalForm
-            :model-value="form"
-            :show="modalOpen"
-            :title="editingId ? 'Editar Valor' : 'Nuevo Valor'"
-            :description="editingId ? 'Modifica los datos del valor.' : 'Completa los datos para registrar un nuevo valor en el catálogo.'"
-            :fields="[
-                { key: 'codigo', label: 'Código *', type: 'text', placeholder: 'Ej: RET' },
-                { key: 'valor', label: 'Valor *', type: 'text', placeholder: 'Nombre descriptivo del valor' },
-                { key: 'is_active', label: 'Activo', type: 'switch' },
-            ]"
-            :errors="errors"
-            :loading="saving"
-            :submit-label="editingId ? 'Actualizar Valor' : 'Crear Valor'"
+            :model-value="catalogoForm"
+            :show="catalogoModalOpen"
+            :title="editingCatalogoId ? 'Editar Catálogo' : 'Nuevo Catálogo'"
+            :description="editingCatalogoId ? 'Modifica el nombre y descripción del catálogo.' : 'Registra un nuevo catálogo para clasificaciones operativas de la paquetería.'"
+            :fields="catalogoFields"
+            :errors="catalogoErrors"
+            :loading="catalogoSaving"
+            :submit-label="editingCatalogoId ? 'Actualizar Catálogo' : 'Crear Catálogo'"
             :columns="1"
-            @update:model-value="Object.assign(form, $event)"
-            @close="closeModal"
+            @update:model-value="Object.assign(catalogoForm, $event)"
+            @close="closeCatalogoModal"
+            @submit="submitCatalogo"
+        />
+
+        <!-- ========================================== -->
+        <!-- MODAL 2: CREAR / EDITAR VALOR DEL CATÁLOGO -->
+        <!-- ========================================== -->
+        <ModalForm
+            :model-value="valorForm"
+            :show="valorModalOpen"
+            :title="editingValorId ? 'Editar Valor del Catálogo' : 'Nuevo Valor del Catálogo'"
+            :description="editingValorId ? `Modificando valor para el catálogo: ${selectedCatalogo?.nombre}` : `Agregando nuevo valor al catálogo: ${selectedCatalogo?.nombre}`"
+            :fields="valorFields"
+            :errors="valorErrors"
+            :loading="valorSaving"
+            :submit-label="editingValorId ? 'Actualizar Valor' : 'Crear Valor'"
+            :columns="1"
+            @update:model-value="Object.assign(valorForm, $event)"
+            @close="closeValorModal"
             @submit="submitValor"
         />
     </AdminLayout>

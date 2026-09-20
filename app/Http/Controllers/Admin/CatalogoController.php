@@ -10,6 +10,8 @@ use App\Http\Requests\Management\UpdateCatalogoValorRequest;
 use App\Models\Catalogo;
 use App\Models\CatalogoValor;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Spatie\Multitenancy\Models\Tenant;
 
 class CatalogoController extends Controller
@@ -22,11 +24,117 @@ class CatalogoController extends Controller
             ->visibleByTenant($tenantId)
             ->withCount('valores')
             ->orderBy('nombre')
-            ->get(['id', 'nombre', 'slug', 'is_global', 'description']);
+            ->get(['id', 'nombre', 'slug', 'is_global', 'tenant_id', 'description']);
 
         return response()->json([
             'success' => true,
             'data' => $catalogos,
+        ]);
+    }
+
+    public function storeCatalogo(Request $request): JsonResponse
+    {
+        $tenantId = Tenant::current()?->id;
+
+        $validated = $request->validate([
+            'nombre' => ['required', 'string', 'max:255', 'unique:catalogos,nombre'],
+            'slug' => ['required', 'string', 'max:100', 'unique:catalogos,slug', 'regex:/^[a-z0-9-]+$/'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ], [
+            'nombre.required' => 'El nombre del catálogo es obligatorio.',
+            'nombre.unique' => 'Ya existe un catálogo con este nombre.',
+            'slug.required' => 'El slug del catálogo es obligatorio.',
+            'slug.unique' => 'Ya existe un catálogo con este slug.',
+            'slug.regex' => 'El slug solo puede contener letras minúsculas, números y guiones.',
+        ]);
+
+        $catalogo = Catalogo::query()->create([
+            'nombre' => $validated['nombre'],
+            'slug' => $validated['slug'],
+            'description' => $validated['description'] ?? null,
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $tenantId,
+            'created_by' => auth()->id(),
+            'is_active' => true,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Catálogo creado correctamente.',
+            'data' => $catalogo,
+        ], 201);
+    }
+
+    public function updateCatalogo(Request $request, int $id): JsonResponse
+    {
+        $tenantId = Tenant::current()?->id;
+
+        $catalogo = Catalogo::query()
+            ->visibleByTenant($tenantId)
+            ->findOrFail($id);
+
+        if ($catalogo->tenant_id !== null && $catalogo->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para modificar este catálogo.',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'nombre' => ['required', 'string', 'max:255', Rule::unique('catalogos', 'nombre')->ignore($id)],
+            'description' => ['nullable', 'string', 'max:500'],
+        ], [
+            'nombre.required' => 'El nombre del catálogo es obligatorio.',
+            'nombre.unique' => 'Ya existe un catálogo con este nombre.',
+        ]);
+
+        $catalogo->update([
+            'nombre' => $validated['nombre'],
+            'description' => $validated['description'] ?? $catalogo->description,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Catálogo actualizado correctamente.',
+            'data' => $catalogo,
+        ]);
+    }
+
+    public function destroyCatalogo(int $id): JsonResponse
+    {
+        $tenantId = Tenant::current()?->id;
+
+        $catalogo = Catalogo::query()
+            ->visibleByTenant($tenantId)
+            ->findOrFail($id);
+
+        if ($catalogo->is_global && ! auth()->user()?->isManagement()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pueden eliminar catálogos base del sistema.',
+            ], 403);
+        }
+
+        if ($catalogo->tenant_id !== null && $catalogo->tenant_id !== $tenantId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para eliminar este catálogo.',
+            ], 403);
+        }
+
+        if ($catalogo->valores()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede eliminar el catálogo porque tiene valores asociados. Elimina primero sus valores.',
+            ], 422);
+        }
+
+        $catalogo->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Catálogo eliminado correctamente.',
         ]);
     }
 
@@ -120,16 +228,30 @@ class CatalogoController extends Controller
     {
         $tenantId = Tenant::current()?->id;
 
-        $valor = CatalogoValor::query()->findOrFail($id);
+        $valor = CatalogoValor::query()->with('catalogo')->findOrFail($id);
 
-        if ($valor->tenant_id !== $tenantId) {
+        if ($valor->catalogo && $valor->catalogo->scope === Catalogo::SCOPE_SAAS) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No tienes permiso para eliminar valores de este catálogo.',
+            ], 403);
+        }
+
+        if ($valor->tenant_id !== null && $valor->tenant_id !== $tenantId) {
             return response()->json([
                 'success' => false,
                 'message' => 'No tienes permiso para eliminar este valor.',
             ], 403);
         }
 
-        $valor->delete();
+        try {
+            $valor->delete();
+        } catch (\Illuminate\Database\QueryException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se puede eliminar el valor porque está siendo utilizado en el sistema.',
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

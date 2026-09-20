@@ -300,4 +300,139 @@ class CatalogoControllerTest extends TestCase
         $response->assertForbidden();
         $response->assertJsonPath('message', 'No tienes permiso para eliminar este valor.');
     }
+
+    public function test_store_catalogo_creates_new_operational_catalog(): void
+    {
+        $payload = [
+            'nombre' => 'Prioridad de Entrega',
+            'slug' => 'prioridad-entrega',
+            'description' => 'Catálogo personalizado de prioridades',
+        ];
+
+        $response = $this->actingAs($this->gestor)
+            ->postJson(route('admin.configuracion.catalogos.store'), $payload);
+
+        $response->assertCreated();
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('data.slug', 'prioridad-entrega');
+        $response->assertJsonPath('data.scope', Catalogo::SCOPE_PAQUETERIA);
+        $response->assertJsonPath('data.tenant_id', $this->tenant->id);
+
+        $this->assertDatabaseHas('catalogos', [
+            'slug' => 'prioridad-entrega',
+            'scope' => 'paqueteria',
+            'tenant_id' => $this->tenant->id,
+        ]);
+    }
+
+    public function test_update_catalogo_updates_name_and_description(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'Custom Catalog',
+            'slug' => 'custom-cat',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->putJson(route('admin.configuracion.catalogos.update', ['id' => $catalogo->id]), [
+                'nombre' => 'Updated Custom Catalog',
+                'description' => 'Updated description',
+            ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $response->assertJsonPath('data.nombre', 'Updated Custom Catalog');
+
+        $this->assertDatabaseHas('catalogos', [
+            'id' => $catalogo->id,
+            'nombre' => 'Updated Custom Catalog',
+        ]);
+    }
+
+    public function test_destroy_catalogo_deletes_empty_custom_catalog(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'To Delete',
+            'slug' => 'to-delete',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
+
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $this->assertDatabaseMissing('catalogos', ['id' => $catalogo->id]);
+    }
+
+    public function test_destroy_catalogo_fails_if_catalog_has_values(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'Cat With Values',
+            'slug' => 'cat-with-values',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        CatalogoValor::query()->create([
+            'catalogo_id' => $catalogo->id,
+            'codigo' => 'VAL1',
+            'valor' => 'Valor Uno',
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('success', false);
+        $this->assertDatabaseHas('catalogos', ['id' => $catalogo->id]);
+    }
+
+    public function test_destroy_catalogo_fails_for_global_base_catalog(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'Base Global Cat',
+            'slug' => 'base-global-cat',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => true,
+            'tenant_id' => null,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
+
+        $response->assertForbidden();
+        $this->assertDatabaseHas('catalogos', ['id' => $catalogo->id]);
+    }
+
+    public function test_destroy_valor_global_allowed(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'Global Catalog',
+            'slug' => 'global-cat',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => true,
+            'tenant_id' => null,
+        ]);
+
+        $valor = CatalogoValor::query()->create([
+            'catalogo_id' => $catalogo->id,
+            'codigo' => 'GLOB_DEL',
+            'valor' => 'Global to Delete',
+            'tenant_id' => null,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.configuracion.catalogos.valores.destroy', ['id' => $valor->id]));
+
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $this->assertDatabaseMissing('catalogo_valores', ['id' => $valor->id]);
+    }
 }
