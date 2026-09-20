@@ -217,6 +217,8 @@ Route::middleware(['auth', 'tenant', 'gestor'])
                 ->name('admin.shipments.destroy');
 
             // Planes de Entrega / Tareas de Conductores
+            Route::get('/shipment-tasks/stats', [ShipmentTaskController::class, 'stats'])
+                ->name('admin.shipment-tasks.stats');
             Route::get('/shipment-tasks', [ShipmentTaskController::class, 'list'])
                 ->name('admin.shipment-tasks.list');
             Route::get('/shipment-tasks/next-code', [ShipmentTaskController::class, 'nextCode'])

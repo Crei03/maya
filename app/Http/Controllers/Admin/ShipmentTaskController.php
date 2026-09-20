@@ -30,11 +30,25 @@ class ShipmentTaskController extends Controller
         $cs = app(\App\Services\CatalogoService::class);
 
         return Inertia::render('Admin/PlanesEntrega/Index', [
+            'initialStats' => $this->service->getStats(),
             'taskStatuses' => $cs->getValoresBySlug('estado-tarea'),
             'itemStatuses' => $cs->getValoresBySlug('estado-item-tarea'),
             'priorities' => $cs->getValoresBySlug('prioridad-tarea'),
             'referenceTypes' => $cs->getValoresBySlug('tipo-referencia'),
             'packageTypes' => $cs->getValoresBySlug('tipo-paquete'),
+        ]);
+    }
+
+    /**
+     * Retorna estadísticas KPI de planes de entrega para tarjetas métricas.
+     */
+    public function stats(Request $request): JsonResponse
+    {
+        $stats = $this->service->getStats($request->only(['origin_warehouse_id', 'date_from', 'date_to']));
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats,
         ]);
     }
 

@@ -65,6 +65,8 @@ class ShipmentTask extends Model
         'driver_id',
         'vehicle_id',
         'origin_warehouse_id',
+        'scheduled_date',
+        'started_at',
         'start_date',
         'end_date',
         'total_hours',
@@ -76,6 +78,8 @@ class ShipmentTask extends Model
     protected function casts(): array
     {
         return [
+            'scheduled_date' => 'datetime',
+            'started_at' => 'datetime',
             'start_date' => 'datetime',
             'end_date' => 'datetime',
             'total_hours' => 'decimal:2',

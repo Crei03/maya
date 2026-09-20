@@ -24,6 +24,74 @@ class ShipmentTaskService
     }
 
     /**
+     * Retorna estadísticas KPI agregadas para los planes de entrega.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function getStats(array $filters = []): array
+    {
+        $baseQuery = ShipmentTask::query();
+
+        if (! empty($filters['origin_warehouse_id'] ?? null)) {
+            $baseQuery->where('origin_warehouse_id', $filters['origin_warehouse_id']);
+        }
+
+        if (! empty($filters['date_from'] ?? null)) {
+            $baseQuery->whereDate('scheduled_date', '>=', $filters['date_from']);
+        }
+
+        if (! empty($filters['date_to'] ?? null)) {
+            $baseQuery->whereDate('scheduled_date', '<=', $filters['date_to']);
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        $cs = app(\App\Services\CatalogoService::class);
+        $statuses = $cs->getValoresBySlug('estado-tarea');
+
+        $countsByCode = [
+            'PENDIENTE' => 0,
+            'EN_PROCESO' => 0,
+            'COMPLETADA' => 0,
+            'CANCELADA' => 0,
+        ];
+
+        foreach ($statuses as $status) {
+            $countsByCode[$status->codigo] = 0;
+        }
+
+        $byStatusId = (clone $baseQuery)
+            ->whereNotNull('status_id')
+            ->select('status_id', DB::raw('count(*) as aggregate'))
+            ->groupBy('status_id')
+            ->pluck('aggregate', 'status_id');
+
+        foreach ($byStatusId as $statusId => $count) {
+            $matched = $statuses->firstWhere('id', (int) $statusId);
+            if ($matched) {
+                $countsByCode[$matched->codigo] = ($countsByCode[$matched->codigo] ?? 0) + (int) $count;
+            }
+        }
+
+        $pending = $countsByCode['PENDIENTE'] ?? 0;
+        $inProgress = $countsByCode['EN_PROCESO'] ?? 0;
+        $completed = $countsByCode['COMPLETADA'] ?? 0;
+        $cancelled = $countsByCode['CANCELADA'] ?? 0;
+
+        return [
+            'total' => $total,
+            'by_status' => $countsByCode,
+            'summary' => [
+                'pending' => $pending,
+                'in_progress' => $inProgress,
+                'completed' => $completed,
+                'cancelled' => $cancelled,
+            ],
+        ];
+    }
+
+    /**
      * Listar planes de entrega con paginación y filtros.
      *
      * @param  array<string, mixed>  $filters
@@ -147,6 +215,7 @@ class ShipmentTaskService
             $task->driver_id = (int) $data['driver_id'];
             $task->vehicle_id = $data['vehicle_id'] ?? null;
             $task->origin_warehouse_id = $data['origin_warehouse_id'];
+            $task->scheduled_date = $data['start_date'];
             $task->start_date = $data['start_date'];
             $task->status_id = $cs->getValorIdByCodigo('estado-tarea', 'PENDIENTE');
             $task->notes = $data['notes'] ?? null;
@@ -303,8 +372,10 @@ class ShipmentTaskService
         }
 
         return DB::transaction(function () use ($task, $inProgressStatusId, $inTransitShipmentStatusId): ShipmentTask {
+            $now = now();
             $task->status_id = $inProgressStatusId;
-            $task->start_date = now();
+            $task->started_at = $now;
+            $task->start_date = $now;
             $task->save();
 
             $task->load(['status', 'items.shipment', 'driver', 'warehouse']);
@@ -355,13 +426,16 @@ class ShipmentTaskService
 
         return DB::transaction(function () use ($task, $completedTaskId, $retornadoItemId, $entregadoItemId, $enBodegaShipmentId): ShipmentTask {
             $endDate = now();
-            $startDate = $task->start_date ?? $endDate;
+            $startDate = $task->started_at ?? $task->start_date ?? $endDate;
             $diffMinutes = $startDate->diffInMinutes($endDate);
             $totalHours = round($diffMinutes / 60, 2);
 
             $task->status_id = $completedTaskId;
             $task->end_date = $endDate;
             $task->total_hours = $totalHours;
+            if (! $task->started_at && $task->start_date) {
+                $task->started_at = $task->start_date;
+            }
             $task->save();
 
             $task->load(['status', 'items.shipment', 'warehouse']);
@@ -718,6 +792,25 @@ class ShipmentTaskService
         $statusLabel = $task->status?->valor ?? 'Pendiente';
         $statusMetadata = $task->status?->metadata ?? [];
 
+        $scheduledDate = $task->scheduled_date ?? $task->start_date;
+        $startedAt = $task->started_at;
+        if (! $startedAt && in_array($statusCode, ['EN_PROCESO', 'COMPLETADA'], true)) {
+            $startedAt = $task->start_date;
+        }
+
+        $durationFormatted = null;
+        if ($task->total_hours !== null) {
+            $totalMinutes = (int) round(((float) $task->total_hours) * 60);
+            $hours = intdiv($totalMinutes, 60);
+            $minutes = $totalMinutes % 60;
+            $durationFormatted = "{$hours}h ".str_pad((string) $minutes, 2, '0', STR_PAD_LEFT).'m';
+        } elseif ($startedAt && $task->end_date) {
+            $diffMinutes = $startedAt->diffInMinutes($task->end_date);
+            $hours = intdiv((int) $diffMinutes, 60);
+            $minutes = ((int) $diffMinutes) % 60;
+            $durationFormatted = "{$hours}h ".str_pad((string) $minutes, 2, '0', STR_PAD_LEFT).'m';
+        }
+
         $data = [
             'id' => $task->id,
             'title' => $task->title,
@@ -729,10 +822,16 @@ class ShipmentTaskService
             'vehicle_capacity_kg' => $task->vehicle?->capacity_kg ?? null,
             'origin_warehouse_id' => $task->origin_warehouse_id,
             'warehouse_name' => $task->warehouse?->name ?? 'Sin bodega',
+            'scheduled_date' => $scheduledDate ? $scheduledDate->format('Y-m-d H:i') : null,
+            'scheduled_date_raw' => $scheduledDate ? $scheduledDate->toIso8601String() : null,
+            'started_at' => $startedAt ? $startedAt->format('Y-m-d H:i') : null,
+            'started_at_raw' => $startedAt ? $startedAt->toIso8601String() : null,
             'start_date' => $task->start_date ? $task->start_date->format('Y-m-d H:i') : null,
             'start_date_raw' => $task->start_date ? $task->start_date->toIso8601String() : null,
             'end_date' => $task->end_date ? $task->end_date->format('Y-m-d H:i') : null,
+            'end_date_raw' => $task->end_date ? $task->end_date->toIso8601String() : null,
             'total_hours' => $task->total_hours !== null ? (float) $task->total_hours : null,
+            'duration_formatted' => $durationFormatted,
             'status_id' => $task->status_id,
             'status' => $statusCode,
             'status_code' => $statusCode,

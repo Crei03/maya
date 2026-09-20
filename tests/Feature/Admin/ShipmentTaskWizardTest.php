@@ -679,4 +679,46 @@ class ShipmentTaskWizardTest extends TestCase
             'shipment_id' => $shipment->id,
         ]);
     }
+
+    public function test_stats_endpoint_returns_kpi_counts(): void
+    {
+        $cs = app(\App\Services\CatalogoService::class);
+        $pendingStatusId = $cs->getValorIdByCodigo('estado-tarea', 'PENDIENTE');
+        $inProgressStatusId = $cs->getValorIdByCodigo('estado-tarea', 'EN_PROCESO');
+
+        ShipmentTask::create([
+            'tenant_id' => $this->tenant->id,
+            'code' => 'PLE-2026-09-0001',
+            'title' => 'PLE-2026-09-0001',
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $this->vehicle->id,
+            'origin_warehouse_id' => $this->warehouse->id,
+            'scheduled_date' => now(),
+            'start_date' => now(),
+            'status_id' => $pendingStatusId,
+        ]);
+
+        ShipmentTask::create([
+            'tenant_id' => $this->tenant->id,
+            'code' => 'PLE-2026-09-0002',
+            'title' => 'PLE-2026-09-0002',
+            'driver_id' => $this->driver->id,
+            'vehicle_id' => $this->vehicle->id,
+            'origin_warehouse_id' => $this->warehouse->id,
+            'scheduled_date' => now(),
+            'started_at' => now(),
+            'start_date' => now(),
+            'status_id' => $inProgressStatusId,
+        ]);
+
+        $response = $this->actingAs($this->gestor)->getJson('/api/shipment-tasks/stats');
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.total', 2)
+            ->assertJsonPath('data.summary.pending', 1)
+            ->assertJsonPath('data.summary.in_progress', 1)
+            ->assertJsonPath('data.summary.completed', 0)
+            ->assertJsonPath('data.summary.cancelled', 0);
+    }
 }
