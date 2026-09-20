@@ -11,6 +11,7 @@ use App\Models\Catalogo;
 use App\Models\CatalogoValor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Spatie\Multitenancy\Models\Tenant;
 
@@ -109,10 +110,10 @@ class CatalogoController extends Controller
             ->visibleByTenant($tenantId)
             ->findOrFail($id);
 
-        if ($catalogo->is_global && ! auth()->user()?->isManagement()) {
+        if ($catalogo->scope === Catalogo::SCOPE_SAAS && ! auth()->user()?->isManagement()) {
             return response()->json([
                 'success' => false,
-                'message' => 'No se pueden eliminar catálogos base del sistema.',
+                'message' => 'No se pueden eliminar catálogos de configuración SaaS.',
             ], 403);
         }
 
@@ -123,14 +124,17 @@ class CatalogoController extends Controller
             ], 403);
         }
 
-        if ($catalogo->valores()->exists()) {
+        try {
+            DB::transaction(function () use ($catalogo) {
+                $catalogo->valores()->delete();
+                $catalogo->delete();
+            });
+        } catch (\Illuminate\Database\QueryException) {
             return response()->json([
                 'success' => false,
-                'message' => 'No se puede eliminar el catálogo porque tiene valores asociados. Elimina primero sus valores.',
+                'message' => 'No se puede eliminar el catálogo porque tiene valores que están siendo utilizados en el sistema.',
             ], 422);
         }
-
-        $catalogo->delete();
 
         return response()->json([
             'success' => true,

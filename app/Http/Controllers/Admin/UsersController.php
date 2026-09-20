@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Services\UsersService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,7 +79,14 @@ class UsersController extends Controller
 
     public function destroy(string $id): JsonResponse
     {
-        $this->usersService->delete($id);
+        try {
+            $this->usersService->delete($id);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->validator->errors()->first(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Spatie\Multitenancy\Models\Tenant;
 
 class UsersService
@@ -76,7 +77,19 @@ class UsersService
     {
         $user = User::query()->findOrFail($id);
 
-        return (bool) $user->delete();
+        if (auth()->id() === $user->id) {
+            throw ValidationException::withMessages([
+                'user' => 'No puedes eliminar tu propio usuario en sesión.',
+            ]);
+        }
+
+        try {
+            return (bool) $user->delete();
+        } catch (\Illuminate\Database\QueryException) {
+            throw ValidationException::withMessages([
+                'user' => 'No se puede eliminar el usuario porque tiene registros asociados en el sistema.',
+            ]);
+        }
     }
 
     public function mapUser(User $user): array

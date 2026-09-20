@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\DriverProfile;
+use App\Models\Manifest;
+use App\Models\ShipmentTask;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Spatie\Multitenancy\Models\Tenant;
 
 class DriverService
@@ -163,7 +166,22 @@ class DriverService
             ->where('role', User::ROLE_MESSENGER)
             ->findOrFail($id);
 
-        return (bool) $user->delete();
+        $hasManifests = Manifest::query()->where('messenger_id', $user->id)->exists();
+        $hasTasks = ShipmentTask::query()->where('driver_id', $user->id)->exists();
+
+        if ($hasManifests || $hasTasks) {
+            throw ValidationException::withMessages([
+                'driver' => 'No se puede eliminar el conductor porque tiene rutas o manifiestos asignados.',
+            ]);
+        }
+
+        try {
+            return (bool) $user->delete();
+        } catch (\Illuminate\Database\QueryException) {
+            throw ValidationException::withMessages([
+                'driver' => 'No se puede eliminar el conductor porque tiene registros asociados en el sistema.',
+            ]);
+        }
     }
 
     /**

@@ -216,6 +216,23 @@ class ClientApiTest extends TestCase
         $this->assertDatabaseMissing('clients', ['id' => $client->id]);
     }
 
+    public function test_delete_client_fails_if_has_shipments(): void
+    {
+        $client = Client::factory()->create(['tenant_id' => $this->tenant->id]);
+        Shipment::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'sender_id' => $client->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.clients.destroy', ['id' => $client->id]));
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false);
+
+        $this->assertDatabaseHas('clients', ['id' => $client->id]);
+    }
+
     public function test_tenant_isolation_clients(): void
     {
         $otherTenant = Tenant::query()->create([

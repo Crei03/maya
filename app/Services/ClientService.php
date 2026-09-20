@@ -10,6 +10,7 @@ use App\Models\Client;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ClientService
 {
@@ -198,7 +199,19 @@ class ClientService
     {
         $client = Client::query()->findOrFail($id);
 
-        return (bool) $client->delete();
+        if ($client->shipments()->exists()) {
+            throw ValidationException::withMessages([
+                'client' => 'No se puede eliminar el cliente porque tiene envíos asociados.',
+            ]);
+        }
+
+        try {
+            return (bool) $client->delete();
+        } catch (\Illuminate\Database\QueryException) {
+            throw ValidationException::withMessages([
+                'client' => 'No se puede eliminar el cliente porque tiene registros asociados en el sistema.',
+            ]);
+        }
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\StoreDriverRequest;
 use App\Http\Requests\Admin\UpdateDriverRequest;
 use App\Services\DriverService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
 
 class DriverController extends Controller
 {
@@ -78,7 +79,14 @@ class DriverController extends Controller
      */
     public function destroy(string $driver): JsonResponse
     {
-        $this->driverService->delete($driver);
+        try {
+            $this->driverService->delete($driver);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->validator->errors()->first(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

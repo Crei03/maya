@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Models\DriverProfile;
+use App\Models\ShipmentTask;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -326,6 +327,26 @@ class DriverApiTest extends TestCase
 
         $this->assertDatabaseMissing('users', ['id' => $messenger->id]);
         $this->assertDatabaseMissing('driver_profiles', ['user_id' => $messenger->id]);
+    }
+
+    public function test_delete_driver_fails_if_has_assigned_tasks(): void
+    {
+        $messenger = User::factory()->create([
+            'role' => User::ROLE_MESSENGER,
+            'status' => true,
+        ]);
+        DriverProfile::factory()->create(['user_id' => $messenger->id]);
+        ShipmentTask::factory()->create([
+            'driver_id' => $messenger->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.drivers.destroy', $messenger->id));
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false);
+
+        $this->assertDatabaseHas('users', ['id' => $messenger->id]);
     }
 
     // ============================================================================

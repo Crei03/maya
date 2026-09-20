@@ -9,6 +9,7 @@ use App\Http\Requests\Admin\UpdateClientRequest;
 use App\Services\ClientService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -92,7 +93,14 @@ class ClientController extends Controller
      */
     public function destroy(string $id): JsonResponse
     {
-        $this->clientService->delete($id);
+        try {
+            $this->clientService->delete($id);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->validator->errors()->first(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

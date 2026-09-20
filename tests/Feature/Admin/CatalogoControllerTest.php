@@ -6,6 +6,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Catalogo;
 use App\Models\CatalogoValor;
+use App\Models\Shipment;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -369,17 +370,17 @@ class CatalogoControllerTest extends TestCase
         $this->assertDatabaseMissing('catalogos', ['id' => $catalogo->id]);
     }
 
-    public function test_destroy_catalogo_fails_if_catalog_has_values(): void
+    public function test_destroy_catalogo_deletes_catalog_with_unreferenced_values(): void
     {
         $catalogo = Catalogo::query()->create([
-            'nombre' => 'Cat With Values',
-            'slug' => 'cat-with-values',
+            'nombre' => 'Cat With Unused Values',
+            'slug' => 'cat-unused-values',
             'scope' => Catalogo::SCOPE_PAQUETERIA,
             'is_global' => false,
             'tenant_id' => $this->tenant->id,
         ]);
 
-        CatalogoValor::query()->create([
+        $valor = CatalogoValor::query()->create([
             'catalogo_id' => $catalogo->id,
             'codigo' => 'VAL1',
             'valor' => 'Valor Uno',
@@ -389,17 +390,50 @@ class CatalogoControllerTest extends TestCase
         $response = $this->actingAs($this->gestor)
             ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
 
+        $response->assertOk();
+        $response->assertJsonPath('success', true);
+        $this->assertDatabaseMissing('catalogos', ['id' => $catalogo->id]);
+        $this->assertDatabaseMissing('catalogo_valores', ['id' => $valor->id]);
+    }
+
+    public function test_destroy_catalogo_fails_if_values_are_in_use(): void
+    {
+        $catalogo = Catalogo::query()->create([
+            'nombre' => 'Status In Use',
+            'slug' => 'status-in-use',
+            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'is_global' => false,
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        $valor = CatalogoValor::query()->create([
+            'catalogo_id' => $catalogo->id,
+            'codigo' => 'USED',
+            'valor' => 'En Uso',
+            'tenant_id' => $this->tenant->id,
+        ]);
+
+        // Create a shipment referencing this value in package_type_id
+        Shipment::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'package_type_id' => $valor->id,
+        ]);
+
+        $response = $this->actingAs($this->gestor)
+            ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
+
         $response->assertStatus(422);
         $response->assertJsonPath('success', false);
         $this->assertDatabaseHas('catalogos', ['id' => $catalogo->id]);
+        $this->assertDatabaseHas('catalogo_valores', ['id' => $valor->id]);
     }
 
-    public function test_destroy_catalogo_fails_for_global_base_catalog(): void
+    public function test_destroy_catalogo_fails_for_saas_catalog(): void
     {
         $catalogo = Catalogo::query()->create([
-            'nombre' => 'Base Global Cat',
-            'slug' => 'base-global-cat',
-            'scope' => Catalogo::SCOPE_PAQUETERIA,
+            'nombre' => 'SaaS Config Cat',
+            'slug' => 'saas-config-cat',
+            'scope' => Catalogo::SCOPE_SAAS,
             'is_global' => true,
             'tenant_id' => null,
         ]);
@@ -407,7 +441,7 @@ class CatalogoControllerTest extends TestCase
         $response = $this->actingAs($this->gestor)
             ->deleteJson(route('admin.configuracion.catalogos.destroy', ['id' => $catalogo->id]));
 
-        $response->assertForbidden();
+        $response->assertNotFound();
         $this->assertDatabaseHas('catalogos', ['id' => $catalogo->id]);
     }
 
