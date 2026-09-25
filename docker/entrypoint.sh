@@ -30,5 +30,11 @@ if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
     php artisan migrate --force || true
 fi
 
+# Optional database seeders if RUN_SEEDERS=true
+if [ "${RUN_SEEDERS:-false}" = "true" ]; then
+    echo ">>> Running database seeders..."
+    php artisan db:seed --force || true
+fi
+
 echo ">>> Starting Supervisor (Nginx + PHP-FPM) on port ${PORT}..."
 exec /usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf
