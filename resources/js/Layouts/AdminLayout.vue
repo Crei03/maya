@@ -39,8 +39,6 @@ const navigation = [
     { name: 'Clientes', href: route('admin.clientes'), icon: ['fas', 'user'], current: route().current('admin.clientes*') },
     { name: 'Asignación', href: route('admin.planes-entrega'), icon: ['fas', 'truck'], current: route().current('admin.planes-entrega*') || route().current('admin.asignacion-transporte*') },
     { name: 'Conciliación', href: route('admin.conciliacion-cierre'), icon: ['fas', 'clipboard-check'], current: route().current('admin.conciliacion-cierre') },
-    { name: 'Mensajeros', href: '#', icon: ['fas', 'users'], current: false },
-    { name: 'Reportes', href: '#', icon: ['fas', 'chart-line'], current: false },
     { name: 'Configuración', href: route('admin.configuracion'), icon: ['fas', 'gear'], current: route().current('admin.configuracion*') },
 ];
 </script>
