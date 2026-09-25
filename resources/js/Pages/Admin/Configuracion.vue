@@ -33,14 +33,14 @@ const selectSection = (section) => {
         <div class="space-y-6">
             <section
                 v-if="!activeSection"
-                class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm"
+                class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm"
             >
-                <h2 class="text-base font-semibold text-[var(--maya-text-main)]">Secciones</h2>
+                <h2 class="text-lg font-semibold text-[var(--maya-text-main)]">Secciones</h2>
                 <p class="mt-1 text-sm text-[var(--maya-text-muted)]">
-                    Selecciona la seccion que deseas administrar.
+                    Selecciona la sección que deseas administrar.
                 </p>
 
-                <div class="mt-4 flex flex-wrap gap-2">
+                <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <SettingsSectionButton
                         v-for="section in sections"
                         :key="section.key"
