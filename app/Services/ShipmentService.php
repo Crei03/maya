@@ -62,6 +62,10 @@ class ShipmentService
             $query->where('warehouse_id', $filters['warehouse_id']);
         }
 
+        if (! empty($filters['sender_id'] ?? null)) {
+            $query->where('sender_id', $filters['sender_id']);
+        }
+
         if (! empty($filters['package_type'] ?? null)) {
             if (is_numeric($filters['package_type'])) {
                 $query->where('package_type_id', (int) $filters['package_type']);

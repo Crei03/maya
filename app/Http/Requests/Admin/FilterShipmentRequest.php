@@ -28,6 +28,7 @@ class FilterShipmentRequest extends FormRequest
             'date_from' => ['date', 'nullable'],
             'date_to' => ['date', 'nullable', 'after_or_equal:date_from'],
             'package_type' => ['string', 'nullable'],
+            'sender_id' => ['string', 'nullable'],
             'per_page' => ['integer', 'nullable', 'min:1', 'max:100'],
         ];
     }

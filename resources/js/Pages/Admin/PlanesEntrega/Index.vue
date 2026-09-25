@@ -1,6 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted, onBeforeUnmount } from 'vue';
 import { Head } from '@inertiajs/vue3';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DataTable from '@/Components/DataTable.vue';
 import RefreshButton from '@/Components/buttons/RefreshButton.vue';
@@ -77,8 +79,7 @@ const clientsList = ref([]);
 const availableWarehouseShipments = ref([]);
 const loadingWarehouseShipments = ref(false);
 
-// --- Estado del Wizard Modal ---
-const wizardOpen = ref(false);
+// --- Estado del Asistente de Creación ---
 const currentStep = ref(1);
 const savingTask = ref(false);
 const wizardErrors = ref({});
@@ -98,9 +99,11 @@ const wizardForm = reactive({
 // Formulario de Parada rápida ("Al vuelo")
 const quickStopForm = reactive({
     sender_id: '',
+    shipment_id: null,
     recipient_name: '',
     recipient_phone: '',
     destination_address: '',
+    destination_coords: null,
     package_type: 'caja',
     weight_lb: '',
     content_description: '',
@@ -112,7 +115,7 @@ const quickStopForm = reactive({
 });
 
 // --- Vista y Detalle de Plan de Entrega ---
-const currentView = ref('list'); // 'list' | 'detail'
+const currentView = ref('list'); // 'list' | 'create' | 'detail'
 const detailTask = ref(null);
 const loadingDetail = ref(false);
 const savingReorder = ref(false);
@@ -163,6 +166,251 @@ const priorityCounts = computed(() => {
     });
     return counts;
 });
+
+// Conversión estándar de peso a kilogramos
+const formatWeightKg = (lb, kg) => {
+    if (kg !== null && kg !== undefined && kg !== '' && !isNaN(kg) && Number(kg) > 0) {
+        return `${Number(kg).toFixed(2)} kg`;
+    }
+    const valLb = parseFloat(lb);
+    if (!isNaN(valLb) && valLb > 0) {
+        return `${(valLb / 2.20462).toFixed(2)} kg`;
+    }
+    return '0.00 kg';
+};
+
+// --- Visualizador de Mapa de Entrega del Cliente (Leaflet - Solo Lectura) ---
+const stopMapContainer = ref(null);
+let stopMapInstance = null;
+let stopMarkerInstance = null;
+
+const parseCoords = (coords) => {
+    if (!coords) return null;
+    if (typeof coords === 'object' && coords.lat && coords.lng) {
+        return { lat: Number(coords.lat), lng: Number(coords.lng) };
+    }
+    if (Array.isArray(coords) && coords.length >= 2) {
+        return { lat: Number(coords[0]), lng: Number(coords[1]) };
+    }
+    if (typeof coords === 'string') {
+        const parts = coords.split(',').map((p) => Number(p.trim()));
+        if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            return { lat: parts[0], lng: parts[1] };
+        }
+    }
+    return null;
+};
+
+const clientCoords = computed(() => {
+    return parseCoords(quickStopForm.destination_coords);
+});
+
+const initOrUpdateMap = () => {
+    const coords = clientCoords.value;
+    if (!stopMapContainer.value || !coords) {
+        destroyMap();
+        return;
+    }
+
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    });
+
+    if (!stopMapInstance) {
+        stopMapInstance = L.map(stopMapContainer.value, {
+            zoomControl: true,
+            dragging: false,
+            touchZoom: false,
+            doubleClickZoom: false,
+            scrollWheelZoom: false,
+            boxZoom: false,
+            keyboard: false,
+        }).setView([coords.lat, coords.lng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19,
+        }).addTo(stopMapInstance);
+
+        stopMarkerInstance = L.marker([coords.lat, coords.lng]).addTo(stopMapInstance);
+    } else {
+        stopMapInstance.setView([coords.lat, coords.lng], 15);
+        if (stopMarkerInstance) {
+            stopMarkerInstance.setLatLng([coords.lat, coords.lng]);
+        } else {
+            stopMarkerInstance = L.marker([coords.lat, coords.lng]).addTo(stopMapInstance);
+        }
+        stopMapInstance.invalidateSize();
+    }
+};
+
+const destroyMap = () => {
+    if (stopMapInstance) {
+        stopMapInstance.remove();
+        stopMapInstance = null;
+        stopMarkerInstance = null;
+    }
+};
+
+// --- Manejo de Documentos y Paquetes (LPNs) ---
+const documentSearchQuery = ref('');
+const isDocumentDropdownOpen = ref(false);
+const documentContainerRef = ref(null);
+
+const availableShipmentsForSelection = computed(() => {
+    const addedIds = new Set(wizardForm.items.map((i) => i.shipment_id).filter(Boolean));
+    const list = availableWarehouseShipments.value.filter((s) => !addedIds.has(s.id));
+    if (quickStopForm.sender_id) {
+        const clientShipments = list.filter((s) => s.sender_id === quickStopForm.sender_id);
+        if (clientShipments.length > 0) {
+            return clientShipments;
+        }
+    }
+    return list;
+});
+
+const availableDocuments = computed(() => {
+    const map = new Map();
+    availableShipmentsForSelection.value.forEach((s) => {
+        const docNum = s.reference_number || s.tracking_number;
+        if (!docNum) return;
+        const key = docNum.trim().toUpperCase();
+        if (!map.has(key)) {
+            map.set(key, {
+                document: docNum,
+                reference_type: s.reference_type || s.reference_type_code || 'PEDIDO',
+                packages: [],
+            });
+        }
+        map.get(key).packages.push(s);
+    });
+    return Array.from(map.values());
+});
+
+const filteredDocuments = computed(() => {
+    const q = documentSearchQuery.value.trim().toLowerCase();
+    if (!q) return availableDocuments.value;
+    return availableDocuments.value.filter((doc) => {
+        return (
+            doc.document.toLowerCase().includes(q) ||
+            doc.packages.some(
+                (p) =>
+                    (p.lpn_code && p.lpn_code.toLowerCase().includes(q)) ||
+                    (p.tracking_number && p.tracking_number.toLowerCase().includes(q))
+            )
+        );
+    });
+});
+
+const displayedDocuments = computed(() => {
+    return filteredDocuments.value.slice(0, 10);
+});
+
+const associatedPackages = computed(() => {
+    const docRef = (quickStopForm.reference_number || documentSearchQuery.value)?.trim().toUpperCase();
+    if (!docRef) return [];
+    const found = availableDocuments.value.find((d) => d.document.trim().toUpperCase() === docRef);
+    return found ? found.packages : [];
+});
+
+const handleDocumentClickOutside = (event) => {
+    if (documentContainerRef.value && !documentContainerRef.value.contains(event.target)) {
+        isDocumentDropdownOpen.value = false;
+    }
+};
+
+const onDocumentFocus = () => {
+    isDocumentDropdownOpen.value = true;
+};
+
+const clearDocument = () => {
+    quickStopForm.reference_number = '';
+    documentSearchQuery.value = '';
+    quickStopForm.shipment_id = null;
+    isDocumentDropdownOpen.value = false;
+};
+
+const selectDocument = (docItem) => {
+    quickStopForm.reference_number = docItem.document;
+    documentSearchQuery.value = '';
+    quickStopForm.reference_type = docItem.reference_type || 'pedido';
+    isDocumentDropdownOpen.value = false;
+
+    if (docItem.packages && docItem.packages.length > 0) {
+        selectPackage(docItem.packages[0]);
+    }
+};
+
+const selectPackage = (pkg) => {
+    if (!pkg) return;
+    quickStopForm.shipment_id = pkg.id;
+    quickStopForm.reference_number = pkg.reference_number || pkg.tracking_number || '';
+    documentSearchQuery.value = '';
+    quickStopForm.reference_type = pkg.reference_type || pkg.reference_type_code || 'pedido';
+    quickStopForm.lpn_code = pkg.lpn_code || '';
+    quickStopForm.pieces_count = pkg.pieces_count || 1;
+
+    // 5.1 El tipo y peso deben ser datos jalados del paquete que se agrega
+    if (pkg.package_type) {
+        quickStopForm.package_type = (pkg.package_type || 'caja').toLowerCase();
+    }
+    if (pkg.weight_lb !== undefined && pkg.weight_lb !== null && pkg.weight_lb !== '') {
+        quickStopForm.weight_lb = pkg.weight_lb;
+    }
+
+    // Si el cliente remitente no estaba seleccionado o difiere, auto-asociar el cliente del paquete
+    if (pkg.sender_id && quickStopForm.sender_id !== pkg.sender_id) {
+        quickStopForm.sender_id = pkg.sender_id;
+        onSenderChange(false);
+    }
+    if (pkg.recipient_name && !quickStopForm.recipient_name) {
+        quickStopForm.recipient_name = pkg.recipient_name;
+    }
+    if (pkg.recipient_phone && !quickStopForm.recipient_phone) {
+        quickStopForm.recipient_phone = pkg.recipient_phone;
+    }
+    if (pkg.destination_address && !quickStopForm.destination_address) {
+        quickStopForm.destination_address = pkg.destination_address;
+    }
+};
+
+const onDocumentInput = (e) => {
+    const val = e.target.value;
+    quickStopForm.reference_number = val;
+    documentSearchQuery.value = val;
+    quickStopForm.shipment_id = null;
+    isDocumentDropdownOpen.value = true;
+};
+
+const onSenderChange = (overrideFields = true) => {
+    if (!quickStopForm.sender_id) {
+        if (overrideFields) {
+            quickStopForm.recipient_name = '';
+            quickStopForm.recipient_phone = '';
+            quickStopForm.destination_address = '';
+            quickStopForm.destination_coords = null;
+        }
+        destroyMap();
+        return;
+    }
+
+    const client = clientsList.value.find((c) => c.id === quickStopForm.sender_id);
+    if (client) {
+        if (overrideFields) {
+            quickStopForm.recipient_name = client.full_name || `${client.first_name || ''} ${client.last_name || ''}`.trim() || client.cliente || '';
+            quickStopForm.recipient_phone = client.phone || '';
+            const addr = client.direccion && client.direccion !== '-' ? client.direccion : (client.reference_point || '');
+            quickStopForm.destination_address = addr;
+        }
+        quickStopForm.destination_coords = client.destination_coords || null;
+        nextTick(() => {
+            initOrUpdateMap();
+        });
+    }
+};
 
 // --- API Calls y Métodos de KPIs ---
 const kpiStats = ref(props.initialStats || {
@@ -274,7 +522,7 @@ const fetchAvailableWarehouseShipments = async (warehouseId) => {
         const res = await window.axios.get(route('admin.shipments.list'), {
             params: {
                 warehouse_id: warehouseId,
-                status: 'in_warehouse',
+                status: 'EN_BODEGA,PENDIENTE',
                 per_page: 100,
             },
         });
@@ -317,15 +565,19 @@ const openWizard = async () => {
     if (wizardForm.origin_warehouse_id) {
         await fetchAvailableWarehouseShipments(wizardForm.origin_warehouse_id);
     }
-    wizardOpen.value = true;
+    currentView.value = 'create';
 };
 
 const resetQuickStopForm = () => {
+    documentSearchQuery.value = '';
+    isDocumentDropdownOpen.value = false;
     Object.assign(quickStopForm, {
-        sender_id: clientsList.value[0]?.id || '',
+        sender_id: '',
+        shipment_id: null,
         recipient_name: '',
         recipient_phone: '',
         destination_address: '',
+        destination_coords: null,
         package_type: 'caja',
         weight_lb: '',
         content_description: '',
@@ -335,10 +587,15 @@ const resetQuickStopForm = () => {
         lpn_code: '',
         pieces_count: 1,
     });
+    destroyMap();
 };
 
 const closeWizard = () => {
-    wizardOpen.value = false;
+    currentView.value = 'list';
+    currentStep.value = 1;
+    wizardErrors.value = {};
+    priorityWarning.value = '';
+    destroyMap();
 };
 
 // --- Lógica de Paradas y Regla de Prioridad ---
@@ -377,6 +634,7 @@ const addQuickStop = () => {
         stop_order: wizardForm.items.length + 1,
         weight_lb: weight,
         destination_address: quickStopForm.destination_address,
+        destination_coords: quickStopForm.destination_coords || null,
         recipient_name: quickStopForm.recipient_name || clientName,
         recipient_phone: quickStopForm.recipient_phone || senderObj?.phone || '',
         package_type: quickStopForm.package_type,
@@ -385,19 +643,24 @@ const addQuickStop = () => {
         reference_number: quickStopForm.reference_number || '',
         lpn_code: quickStopForm.lpn_code || '',
         pieces_count: parseInt(quickStopForm.pieces_count) || 1,
-        new_shipment: {
-            sender_id: quickStopForm.sender_id || null,
-            recipient_name: quickStopForm.recipient_name || clientName,
-            recipient_phone: quickStopForm.recipient_phone || senderObj?.phone || null,
-            destination_address: quickStopForm.destination_address,
-            package_type: quickStopForm.package_type,
-            weight_lb: weight,
-            content_description: quickStopForm.content_description || null,
-            reference_type: quickStopForm.reference_type || null,
-            reference_number: quickStopForm.reference_number || null,
-            lpn_code: quickStopForm.lpn_code || null,
-            pieces_count: parseInt(quickStopForm.pieces_count) || 1,
-        },
+        ...(quickStopForm.shipment_id
+            ? { shipment_id: quickStopForm.shipment_id }
+            : {
+                new_shipment: {
+                    sender_id: quickStopForm.sender_id || null,
+                    recipient_name: quickStopForm.recipient_name || clientName,
+                    recipient_phone: quickStopForm.recipient_phone || senderObj?.phone || null,
+                    destination_address: quickStopForm.destination_address,
+                    destination_coords: quickStopForm.destination_coords || null,
+                    package_type: quickStopForm.package_type,
+                    weight_lb: weight,
+                    content_description: quickStopForm.content_description || null,
+                    reference_type: quickStopForm.reference_type || null,
+                    reference_number: quickStopForm.reference_number || null,
+                    lpn_code: quickStopForm.lpn_code || null,
+                    pieces_count: parseInt(quickStopForm.pieces_count) || 1,
+                },
+            }),
     };
 
     // Insertar la parada en la posición correcta según su prioridad
@@ -553,6 +816,21 @@ const prevStep = () => {
         currentStep.value--;
     }
 };
+
+watch(currentStep, (newStep) => {
+    if (newStep === 2) {
+        nextTick(() => {
+            initOrUpdateMap();
+        });
+    } else {
+        destroyMap();
+    }
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleDocumentClickOutside);
+    destroyMap();
+});
 
 // Guardar Plan de Entrega (Paso 3)
 const submitPlan = async () => {
@@ -745,18 +1023,6 @@ const formatElapsedTime = (startDateStr) => {
     return `${hours}:${minutes}:${seconds}`;
 };
 
-// Conversión de peso a kilogramos
-const formatWeightKg = (lb, kg) => {
-    if (kg !== null && kg !== undefined && kg !== '' && !isNaN(kg) && Number(kg) > 0) {
-        return `${Number(kg).toFixed(2)} kg`;
-    }
-    const valLb = parseFloat(lb);
-    if (!isNaN(valLb) && valLb > 0) {
-        return `${(valLb / 2.20462).toFixed(2)} kg`;
-    }
-    return '0.00 kg';
-};
-
 // --- Acciones del Ciclo de Vida de Tareas ---
 const confirmStartTask = async (task) => {
     const confirmed = await showConfirm(`¿Deseas iniciar el plan de entrega "${task.title}"?\nLos paquetes pasarán a estado "En tránsito".`);
@@ -928,6 +1194,7 @@ const unassignStopFromTask = async (item) => {
 };
 
 onMounted(async () => {
+    document.addEventListener('click', handleDocumentClickOutside);
     timerInterval = setInterval(() => {
         currentNow.value = Date.now();
     }, 1000);
@@ -946,9 +1213,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <Head :title="currentView === 'detail' ? `Detalle: ${detailTask?.title || 'Plan de Entrega'}` : 'Planes de Entrega'" />
+    <Head :title="currentView === 'detail' ? `Detalle: ${detailTask?.title || 'Plan de Entrega'}` : (currentView === 'create' ? `Nuevo Plan: ${wizardForm.title || ''}` : 'Planes de Entrega')" />
 
-    <AdminLayout :title="currentView === 'detail' ? 'Detalle de Plan de Entrega' : 'Planes de Entrega'">
+    <AdminLayout :title="currentView === 'detail' ? 'Detalle de Plan de Entrega' : (currentView === 'create' ? 'Nuevo Plan de Entrega' : 'Planes de Entrega')">
         <!-- ==================================================================== -->
         <!-- VISTA 1: LISTADO Y TABLA DE PLANES DE ENTREGA                         -->
         <!-- ==================================================================== -->
@@ -1453,8 +1720,18 @@ onUnmounted(() => {
                                         <span class="font-mono text-xs text-[var(--maya-primary)] font-semibold">
                                             {{ item.shipment?.tracking_number }}
                                         </span>
-                                        <span v-if="item.shipment?.weight_lb" class="font-mono text-xs text-[var(--maya-text-muted)]">
-                                            {{ (item.shipment?.pieces_count || 1) > 1 ? `${item.shipment.pieces_count} bultos · ` : '' }}({{ item.shipment.weight_lb }} lbs)
+                                        <span
+                                            v-if="item.shipment?.weight_lb"
+                                            class="group relative inline-flex cursor-help items-center font-mono text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)] transition-colors"
+                                            :title="`Conversión: ${formatWeightKg(item.shipment?.weight_lb, item.shipment?.weight_kg)}`"
+                                        >
+                                            <span>{{ (item.shipment?.pieces_count || 1) > 1 ? `${item.shipment.pieces_count} bultos · ` : '' }}({{ item.shipment.weight_lb }} lbs)</span>
+                                            <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-30">
+                                                <span class="rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-mono font-bold text-white shadow-lg whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                    ≈ {{ formatWeightKg(item.shipment?.weight_lb, item.shipment?.weight_kg) }}
+                                                </span>
+                                                <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                            </span>
                                         </span>
                                     </div>
                                     <p class="text-[var(--maya-text-muted)] mt-1 flex items-center gap-1.5 text-xs">
@@ -1585,39 +1862,55 @@ onUnmounted(() => {
         </div>
 
         <!-- ==================================================================== -->
-        <!-- WIZARD MODAL: CREACIÓN DE PLAN DE ENTREGA EN 3 PASOS                 -->
+        <!-- VISTA 3: CREACIÓN DE PLAN DE ENTREGA (EN PANTALLA PRINCIPAL)         -->
         <!-- ==================================================================== -->
-        <Modal :show="wizardOpen" max-width="4xl" @close="closeWizard">
-            <div class="p-6">
-                <!-- Header del Wizard -->
-                <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-4">
-                    <div>
-                        <span class="font-mono text-xs font-bold uppercase tracking-wider text-[var(--maya-primary)]">
-                            Planificador de Rutas
-                        </span>
-                        <h2 class="text-lg font-bold text-[var(--maya-text-main)]">
-                            Nuevo Plan de Entrega: <span class="font-mono font-bold text-black dark:text-white">{{ wizardForm.title }}</span>
-                        </h2>
+        <div v-else-if="currentView === 'create'" class="space-y-6">
+            <!-- Header de Navegación y Acciones (Estilo módulo Paquetes / Detalle) -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 shadow-sm">
+                <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] text-[var(--maya-text-main)] hover:bg-[var(--maya-hover-surface)] transition shadow-xs"
+                            title="Volver al listado de planes"
+                            @click="closeWizard"
+                        >
+                            <font-awesome-icon :icon="['fas', 'arrow-left']" />
+                        </button>
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-mono text-xs font-bold uppercase tracking-wider text-[var(--maya-primary)]">
+                                    Planificador de Rutas
+                                </span>
+                                <span class="text-xs text-[var(--maya-text-muted)]">•</span>
+                                <h1 class="text-lg font-bold text-[var(--maya-text-main)]">
+                                    Nuevo Plan de Entrega
+                                </h1>
+                                <span v-if="wizardForm.title" class="rounded-lg bg-[var(--maya-primary-alpha)] px-2.5 py-0.5 font-mono text-xs font-bold text-[var(--maya-primary)]">
+                                    {{ wizardForm.title }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
+                                Planificación y despacho de ruta con asignación de conductor, vehículo y paradas por prioridad.
+                            </p>
+                        </div>
                     </div>
-
-                    <button
-                        type="button"
-                        class="text-[var(--maya-text-muted)] hover:text-[var(--maya-text-main)]"
-                        @click="closeWizard"
-                    >
-                        <font-awesome-icon :icon="['fas', 'xmark']" class="text-lg" />
-                    </button>
                 </div>
 
                 <!-- Pasos (Step Indicator) -->
-                <div class="my-5 grid grid-cols-3 gap-2">
+                <div class="mt-5 grid grid-cols-3 gap-2 border-t border-[var(--maya-border)] pt-4">
                     <button
                         type="button"
                         class="flex items-center gap-2 rounded-xl p-3 text-left transition"
                         :class="currentStep === 1 ? 'bg-[var(--maya-primary-alpha)] text-[var(--maya-primary)] ring-2 ring-[var(--maya-primary)]' : 'bg-[var(--maya-hover-surface)] text-[var(--maya-text-muted)]'"
                         @click="currentStep = 1"
                     >
-                        <span class="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--maya-primary)] text-xs font-bold text-white">1</span>
+                        <span
+                            class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition"
+                            :class="currentStep === 1 ? 'bg-[var(--maya-primary)] text-white' : (currentStep > 1 ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400')"
+                        >
+                            <font-awesome-icon :icon="['fas', 'route']" />
+                        </span>
                         <div>
                             <p class="text-xs font-bold">Paso 1</p>
                             <p class="text-xs">Configurar Ruta</p>
@@ -1631,7 +1924,12 @@ onUnmounted(() => {
                         :disabled="!wizardForm.driver_id || !wizardForm.origin_warehouse_id"
                         @click="nextStep"
                     >
-                        <span class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" :class="currentStep === 2 ? 'bg-[var(--maya-primary)] text-white' : 'bg-gray-300 text-gray-700'">2</span>
+                        <span
+                            class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition"
+                            :class="currentStep === 2 ? 'bg-[var(--maya-primary)] text-white' : (currentStep > 2 ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400')"
+                        >
+                            <font-awesome-icon :icon="['fas', 'boxes-stacked']" />
+                        </span>
                         <div>
                             <p class="text-xs font-bold">Paso 2</p>
                             <p class="text-xs">Cargar Paradas ({{ wizardForm.items.length }})</p>
@@ -1645,19 +1943,28 @@ onUnmounted(() => {
                         :disabled="wizardForm.items.length === 0"
                         @click="currentStep = 3"
                     >
-                        <span class="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold" :class="currentStep === 3 ? 'bg-[var(--maya-primary)] text-white' : 'bg-gray-300 text-gray-700'">3</span>
+                        <span
+                            class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition"
+                            :class="currentStep === 3 ? 'bg-[var(--maya-primary)] text-white' : 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'"
+                        >
+                            <font-awesome-icon :icon="['fas', 'clipboard-check']" />
+                        </span>
                         <div>
                             <p class="text-xs font-bold">Paso 3</p>
                             <p class="text-xs">Resumen y Despacho</p>
                         </div>
                     </button>
                 </div>
+            </section>
 
-                <!-- Alertas del Wizard -->
-                <div v-if="priorityWarning" class="mb-4 rounded-xl border border-red-300 bg-red-50 p-3 text-xs font-medium text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
-                    <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1.5" />
-                    {{ priorityWarning }}
-                </div>
+            <!-- Alertas del Wizard -->
+            <div v-if="priorityWarning" class="rounded-xl border border-red-300 bg-red-50 p-3 text-xs font-medium text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300">
+                <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="mr-1.5" />
+                {{ priorityWarning }}
+            </div>
+
+            <!-- Contenedor del Paso según currentStep -->
+            <section class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-6 shadow-sm">
 
                 <!-- ================================================================ -->
                 <!-- PASO 1: CONFIGURAR RUTA                                          -->
@@ -1729,7 +2036,7 @@ onUnmounted(() => {
                             >
                                 <option value="">Sin vehículo asignado</option>
                                 <option v-for="v in vehiclesList" :key="v.id" :value="v.id">
-                                    {{ v.brand }} {{ v.model }} - Placa: {{ v.license_plate }} (Cap: {{ v.capacity_kg || 'N/A' }} kg)
+                                    {{ v.brand }} {{ v.model }} - Placa: {{ v.license_plate }} (Cap: {{ v.capacity_kg ? `${Math.round(v.capacity_kg * 2.20462)} lbs (~${v.capacity_kg} kg)` : 'N/A' }})
                                 </option>
                             </select>
                         </div>
@@ -1775,32 +2082,78 @@ onUnmounted(() => {
                 <!-- PASO 2: CARGAR Y ORDENAR PARADAS                                -->
                 <!-- ================================================================ -->
                 <div v-if="currentStep === 2" class="space-y-6">
-                    <!-- Barra de carga del vehículo vs peso acumulado -->
-                    <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3">
-                        <div class="flex flex-wrap items-center justify-between text-xs font-semibold text-[var(--maya-text-main)]">
-                            <span>
-                                <font-awesome-icon :icon="['fas', 'truck']" class="mr-1 text-[var(--maya-primary)]" />
-                                Capacidad del Transporte:
-                                <span v-if="vehicleCapacityKg > 0">{{ vehicleCapacityKg }} kg (~{{ Math.round(vehicleCapacityLb) }} lbs)</span>
-                                <span v-else class="text-[var(--maya-text-muted)]">No especificada</span>
-                            </span>
-                            <span>
-                                Carga Actual: <strong class="font-mono text-sm text-[var(--maya-primary)]">{{ totalStopsWeightLb.toFixed(1) }} lbs</strong>
-                                <span v-if="vehicleCapacityLb > 0"> ({{ loadCapacityPercent }}%)</span>
-                            </span>
-                        </div>
-                        <div v-if="vehicleCapacityLb > 0" class="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                            <div
-                                class="h-full transition-all duration-300"
-                                :class="loadCapacityPercent > 90 ? 'bg-red-500' : loadCapacityPercent > 75 ? 'bg-amber-500' : 'bg-[var(--maya-primary)]'"
-                                :style="{ width: `${loadCapacityPercent}%` }"
-                            />
+                    <!-- Cabecera Superior: Botón Atrás a la izquierda + Capacidad del vehículo -->
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between">
+                        <!-- Botón Atrás: A la izquierda y grande -->
+                        <button
+                            type="button"
+                            class="inline-flex items-center justify-center gap-2.5 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-6 py-3.5 text-sm font-bold text-[var(--maya-text-main)] shadow-sm transition hover:border-[var(--maya-primary)] hover:bg-[var(--maya-primary-alpha)] hover:text-[var(--maya-primary)] whitespace-nowrap shrink-0 self-stretch"
+                            title="Regresar a configurar datos de ruta y conductor (Paso 1)"
+                            @click="prevStep"
+                        >
+                            <font-awesome-icon :icon="['fas', 'arrow-left']" class="text-base" />
+                            <span>Atrás</span>
+                        </button>
+
+                        <!-- Barra de carga del vehículo vs peso acumulado -->
+                        <div class="flex-1 rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3.5 shadow-xs flex flex-col justify-center">
+                            <div class="flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-[var(--maya-text-main)]">
+                                <div class="flex items-center gap-2">
+                                    <font-awesome-icon :icon="['fas', 'truck']" class="text-sm text-[var(--maya-primary)]" />
+                                    <span>
+                                        Capacidad del Transporte:
+                                        <template v-if="vehicleCapacityKg > 0">
+                                            <strong class="font-mono">{{ Math.round(vehicleCapacityLb) }} lbs</strong>
+                                            <span
+                                                class="group relative ml-1 inline-flex cursor-help items-center text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)]"
+                                                :title="`Capacidad en kg: ${vehicleCapacityKg} kg`"
+                                            >
+                                                (~{{ vehicleCapacityKg }} kg)
+                                                <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-30">
+                                                    <span class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                        ≈ {{ vehicleCapacityKg }} kg (1 kg ≈ 2.20462 lbs)
+                                                    </span>
+                                                    <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                                </span>
+                                            </span>
+                                        </template>
+                                        <span v-else class="font-normal text-[var(--maya-text-muted)]">No especificada</span>
+                                    </span>
+                                </div>
+
+                                <div class="flex items-center gap-2">
+                                    <span>
+                                        Carga Actual:
+                                        <strong class="font-mono text-sm text-[var(--maya-primary)]">{{ totalStopsWeightLb.toFixed(1) }} lbs</strong>
+                                        <span
+                                            class="group relative ml-1 inline-flex cursor-help items-center font-mono text-xs text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)]"
+                                            :title="`Conversión: ${formatWeightKg(totalStopsWeightLb)}`"
+                                        >
+                                            (~{{ formatWeightKg(totalStopsWeightLb) }})
+                                            <span class="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover:flex flex-col items-end z-30">
+                                                <span class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                    ≈ {{ formatWeightKg(totalStopsWeightLb) }}
+                                                </span>
+                                                <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1 mr-2"></span>
+                                            </span>
+                                        </span>
+                                        <span v-if="vehicleCapacityLb > 0" class="font-bold"> ({{ loadCapacityPercent }}%)</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-if="vehicleCapacityLb > 0" class="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                <div
+                                    class="h-full transition-all duration-300"
+                                    :class="loadCapacityPercent > 90 ? 'bg-red-500' : loadCapacityPercent > 75 ? 'bg-amber-500' : 'bg-[var(--maya-primary)]'"
+                                    :style="{ width: `${loadCapacityPercent}%` }"
+                                />
+                            </div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                        <!-- Formulario de ingreso rápido de paradas (Izquierda) -->
-                        <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm lg:col-span-5">
+                        <!-- Formulario de ingreso rápido de paradas (Izquierda - Ancho ampliado) -->
+                        <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm lg:col-span-7">
                             <h3 class="flex items-center gap-1.5 text-sm font-bold text-[var(--maya-text-main)]">
                                 <font-awesome-icon :icon="['fas', 'plus']" class="text-xs text-[var(--maya-primary)]" />
                                 Agregar Parada al Vuelo
@@ -1810,15 +2163,17 @@ onUnmounted(() => {
                             </p>
 
                             <div class="mt-3 space-y-3">
+                                <!-- Cliente Remitente: Inicia vacío y jala datos al cambiar -->
                                 <div>
                                     <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Cliente Remitente *</label>
                                     <select
                                         v-model="quickStopForm.sender_id"
                                         class="mt-1 w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
+                                        @change="onSenderChange(true)"
                                     >
-                                        <option value="">Selecciona el remitente</option>
+                                        <option value="">Selecciona el remitente...</option>
                                         <option v-for="c in clientsList" :key="c.id" :value="c.id">
-                                            {{ c.full_name || `${c.first_name} ${c.last_name}` }} ({{ c.phone || 'Sin tel' }})
+                                            {{ c.full_name || `${c.first_name} ${c.last_name}` }}
                                         </option>
                                     </select>
                                 </div>
@@ -1845,19 +2200,102 @@ onUnmounted(() => {
                                 </div>
 
                                 <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">N° Pedido / Doc</label>
-                                        <input
-                                            v-model="quickStopForm.reference_number"
-                                            type="text"
-                                            placeholder="Ej: PED-1002"
-                                            class="mt-1 w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 text-xs font-mono text-[var(--maya-text-main)] focus:outline-none"
-                                        />
+                                    <!-- Documento (Select con búsqueda/escritura, max 10 listados) -->
+                                    <div ref="documentContainerRef" class="relative">
+                                        <div class="flex items-center justify-between">
+                                            <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Documento</label>
+                                            <span v-if="associatedPackages.length > 0" class="text-[10px] font-mono font-semibold text-[var(--maya-primary)]">
+                                                {{ associatedPackages.length }} LPN{{ associatedPackages.length > 1 ? 's' : '' }}
+                                            </span>
+                                        </div>
+                                        <div class="relative mt-1">
+                                            <input
+                                                :value="quickStopForm.reference_number"
+                                                type="text"
+                                                placeholder="Buscar doc o ingresar..."
+                                                class="w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 pr-6 text-xs font-mono text-[var(--maya-text-main)] focus:outline-none"
+                                                @input="onDocumentInput"
+                                                @focus="onDocumentFocus"
+                                            />
+                                            <button
+                                                v-if="quickStopForm.reference_number"
+                                                type="button"
+                                                class="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[11px]"
+                                                title="Limpiar documento"
+                                                @click="clearDocument"
+                                            >
+                                                <font-awesome-icon :icon="['fas', 'times']" />
+                                            </button>
+                                            <button
+                                                v-else
+                                                type="button"
+                                                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[10px]"
+                                                tabindex="-1"
+                                                @click="isDocumentDropdownOpen = !isDocumentDropdownOpen"
+                                            >
+                                                <font-awesome-icon :icon="['fas', isDocumentDropdownOpen ? 'chevron-up' : 'chevron-down']" />
+                                            </button>
+                                        </div>
+
+                                        <!-- Desplegable de documentos coincidentes (Máximo 10) -->
+                                        <div
+                                            v-if="isDocumentDropdownOpen"
+                                            class="absolute z-40 mt-1 max-h-56 w-full min-w-[260px] overflow-y-auto rounded-xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-1 shadow-xl"
+                                        >
+                                            <div class="flex items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--maya-text-muted)] border-b border-[var(--maya-border)]">
+                                                <span>Documentos en Bodega</span>
+                                                <span v-if="filteredDocuments.length > 0">
+                                                    {{ displayedDocuments.length }} de {{ filteredDocuments.length }}
+                                                </span>
+                                            </div>
+
+                                            <div v-if="displayedDocuments.length === 0" class="p-3 text-center text-xs text-[var(--maya-text-muted)]">
+                                                <span v-if="availableDocuments.length === 0">No hay documentos pendientes en bodega.</span>
+                                                <span v-else>Sin coincidencias para "{{ documentSearchQuery }}".</span>
+                                            </div>
+
+                                            <button
+                                                v-for="doc in displayedDocuments"
+                                                :key="doc.document"
+                                                type="button"
+                                                class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs transition hover:bg-[var(--maya-hover-surface)]"
+                                                @click="selectDocument(doc)"
+                                            >
+                                                <div class="truncate mr-2">
+                                                    <span class="font-mono font-bold text-[var(--maya-text-main)]">{{ doc.document }}</span>
+                                                    <span class="ml-1 text-[10px] uppercase text-[var(--maya-text-muted)]">({{ doc.reference_type }})</span>
+                                                </div>
+                                                <span class="shrink-0 rounded bg-[var(--maya-primary-alpha)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--maya-primary)]">
+                                                    {{ doc.packages.length }} bulto{{ doc.packages.length > 1 ? 's' : '' }}
+                                                </span>
+                                            </button>
+
+                                            <div v-if="filteredDocuments.length > 10" class="border-t border-[var(--maya-border)] px-2 py-1 text-center text-[10px] text-[var(--maya-text-muted)]">
+                                                Mostrando 10 de {{ filteredDocuments.length }} documentos. Escribe para filtrar...
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    <!-- LPN / Bultos -->
                                     <div>
                                         <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">LPN / Bultos</label>
                                         <div class="mt-1 flex gap-1">
+                                            <select
+                                                v-if="associatedPackages.length > 1"
+                                                :value="quickStopForm.lpn_code"
+                                                class="w-2/3 rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2 py-1.5 text-xs font-mono text-[var(--maya-text-main)] focus:outline-none"
+                                                title="Seleccionar LPN específico"
+                                                @change="(e) => {
+                                                    const found = associatedPackages.find(p => p.lpn_code === e.target.value);
+                                                    if (found) selectPackage(found);
+                                                }"
+                                            >
+                                                <option v-for="p in associatedPackages" :key="p.id" :value="p.lpn_code">
+                                                    {{ p.lpn_code || p.tracking_number }} ({{ p.weight_lb }} lbs)
+                                                </option>
+                                            </select>
                                             <input
+                                                v-else
                                                 v-model="quickStopForm.lpn_code"
                                                 type="text"
                                                 placeholder="LPN-..."
@@ -1884,6 +2322,33 @@ onUnmounted(() => {
                                     />
                                 </div>
 
+                                <!-- Mapa Visualizador del Punto de Entrega (Solo Lectura) -->
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between text-[11px] font-semibold text-[var(--maya-text-main)]">
+                                        <span class="flex items-center gap-1">
+                                            <font-awesome-icon :icon="['fas', 'map-location-dot']" class="text-[var(--maya-primary)]" />
+                                            Punto de Entrega (Visualizador)
+                                        </span>
+                                        <span v-if="clientCoords" class="font-mono text-[10px] text-[var(--maya-text-muted)]">
+                                            {{ clientCoords.lat.toFixed(4) }}, {{ clientCoords.lng.toFixed(4) }}
+                                        </span>
+                                    </div>
+
+                                    <div
+                                        v-show="clientCoords"
+                                        ref="stopMapContainer"
+                                        class="h-36 w-full rounded-xl border border-[var(--maya-border)] overflow-hidden z-10"
+                                    />
+                                    <div
+                                        v-if="!clientCoords"
+                                        class="flex items-center gap-2 rounded-xl border border-dashed border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-2.5 text-xs text-[var(--maya-text-muted)]"
+                                    >
+                                        <font-awesome-icon :icon="['fas', 'location-crosshairs']" class="text-sm opacity-50 text-[var(--maya-primary)]" />
+                                        <span v-if="quickStopForm.sender_id">El cliente seleccionado no tiene coordenadas GPS registradas en su ficha.</span>
+                                        <span v-else>Selecciona un cliente para previsualizar su ubicación de entrega.</span>
+                                    </div>
+                                </div>
+
                                 <div class="grid grid-cols-2 gap-2">
                                     <div>
                                         <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Tipo</label>
@@ -1892,20 +2357,37 @@ onUnmounted(() => {
                                             class="mt-1 w-full rounded-lg border border-[var(--maya-border)] bg-[var(--maya-bg-base)] px-2.5 py-1.5 text-xs text-[var(--maya-text-main)] focus:outline-none"
                                         >
                                             <template v-if="props.packageTypes?.length">
-                                                <option v-for="pkg in props.packageTypes" :key="pkg.id" :value="pkg.codigo">
+                                                <option v-for="pkg in props.packageTypes" :key="pkg.id" :value="pkg.codigo.toLowerCase()">
                                                     {{ pkg.valor }}
                                                 </option>
                                             </template>
                                             <template v-else>
-                                                <option value="CAJA">Caja</option>
-                                                <option value="SOBRE">Sobre</option>
-                                                <option value="PAQUETE">Paquete</option>
-                                                <option value="PALET">Palet</option>
+                                                <option value="caja">Caja</option>
+                                                <option value="sobre">Sobre</option>
+                                                <option value="paquete">Paquete</option>
+                                                <option value="palet">Palet</option>
                                             </template>
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Peso (lbs) *</label>
+                                        <div class="flex items-center justify-between">
+                                            <label class="block text-[11px] font-semibold text-[var(--maya-text-main)]">Peso (lbs) *</label>
+                                            <!-- Tooltip dinámico en el formulario al escribir peso -->
+                                            <span
+                                                v-if="quickStopForm.weight_lb && !isNaN(parseFloat(quickStopForm.weight_lb))"
+                                                class="group relative inline-flex cursor-help items-center gap-1 text-[10px] font-mono text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)] transition-colors"
+                                                :title="`Conversión: ${formatWeightKg(quickStopForm.weight_lb)}`"
+                                            >
+                                                <span>≈ {{ formatWeightKg(quickStopForm.weight_lb) }}</span>
+                                                <font-awesome-icon :icon="['fas', 'info-circle']" class="text-[9px]" />
+                                                <span class="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover:flex flex-col items-end z-30">
+                                                    <span class="rounded-lg bg-slate-900 px-2 py-0.5 text-[11px] font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                        ≈ {{ formatWeightKg(quickStopForm.weight_lb) }} (1 lb ≈ 0.4536 kg)
+                                                    </span>
+                                                    <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1 mr-1"></span>
+                                                </span>
+                                            </span>
+                                        </div>
                                         <input
                                             v-model="quickStopForm.weight_lb"
                                             type="number"
@@ -1927,7 +2409,7 @@ onUnmounted(() => {
                                             :class="quickStopForm.priority === 'alta' ? 'bg-red-500 text-white ring-2 ring-red-300' : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'"
                                             @click="quickStopForm.priority = 'alta'"
                                         >
-                                            🔴 ALTA
+                                            ALTA
                                         </button>
                                         <button
                                             type="button"
@@ -1935,7 +2417,7 @@ onUnmounted(() => {
                                             :class="quickStopForm.priority === 'media' ? 'bg-amber-500 text-white ring-2 ring-amber-300' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'"
                                             @click="quickStopForm.priority = 'media'"
                                         >
-                                            🟡 MEDIA
+                                            MEDIA
                                         </button>
                                         <button
                                             type="button"
@@ -1943,7 +2425,7 @@ onUnmounted(() => {
                                             :class="quickStopForm.priority === 'baja' ? 'bg-gray-600 text-white ring-2 ring-gray-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'"
                                             @click="quickStopForm.priority = 'baja'"
                                         >
-                                            ⚪ BAJA
+                                            BAJA
                                         </button>
                                     </div>
                                 </div>
@@ -1978,8 +2460,8 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <!-- Lista de paradas ordenadas con controles de prioridad (Derecha) -->
-                        <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm lg:col-span-7">
+                        <!-- Lista de paradas ordenadas con controles de prioridad (Derecha - Ancho ajustado) -->
+                        <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-4 shadow-sm lg:col-span-5">
                             <div class="flex items-center justify-between border-b border-[var(--maya-border)] pb-2">
                                 <div>
                                     <h3 class="text-sm font-bold text-[var(--maya-text-main)]">
@@ -2002,7 +2484,7 @@ onUnmounted(() => {
                                 <p class="text-xs">Usa el formulario de la izquierda para registrar entregas.</p>
                             </div>
 
-                            <div v-else class="mt-3 max-h-[360px] space-y-2 overflow-y-auto pr-1">
+                            <div v-else class="mt-3 max-h-[500px] space-y-2 overflow-y-auto pr-1">
                                 <div
                                     v-for="(item, index) in wizardForm.items"
                                     :key="item.temp_id || item.id"
@@ -2033,9 +2515,22 @@ onUnmounted(() => {
                                                 >
                                                     {{ item.priority_label || item.priority }}
                                                 </span>
-                                                <span class="font-mono text-[11px] text-[var(--maya-text-muted)]">
-                                                    {{ (item.pieces_count || item.shipment?.pieces_count || 1) > 1 ? `${item.pieces_count || item.shipment?.pieces_count} bultos · ` : '' }}{{ item.weight_lb }} lbs ({{ item.package_type }})
-                                                </span>
+                                                <div class="inline-flex items-center gap-1 font-mono text-[11px] text-[var(--maya-text-muted)]">
+                                                    <span>{{ (item.pieces_count || item.shipment?.pieces_count || 1) > 1 ? `${item.pieces_count || item.shipment?.pieces_count} bultos · ` : '' }}{{ item.weight_lb }} lbs</span>
+                                                    <span
+                                                        class="group relative inline-flex cursor-help items-center text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)]"
+                                                        :title="`Conversión: ${formatWeightKg(item.weight_lb)}`"
+                                                    >
+                                                        <span>(~{{ formatWeightKg(item.weight_lb) }})</span>
+                                                        <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-30">
+                                                            <span class="rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-mono text-white shadow-lg whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                                                ≈ {{ formatWeightKg(item.weight_lb) }}
+                                                            </span>
+                                                            <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                                        </span>
+                                                    </span>
+                                                    <span>({{ item.package_type }})</span>
+                                                </div>
                                             </div>
                                             <p class="text-xs text-[var(--maya-text-muted)] mt-0.5">
                                                 📍 {{ item.destination_address }}
@@ -2086,7 +2581,7 @@ onUnmounted(() => {
                             @click="prevStep"
                         >
                             <font-awesome-icon :icon="['fas', 'arrow-left']" />
-                            Volver a Ruta
+                            Atrás
                         </button>
 
                         <button
@@ -2112,7 +2607,21 @@ onUnmounted(() => {
                         </div>
                         <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3 text-center">
                             <p class="text-xs text-[var(--maya-text-muted)]">Carga Total</p>
-                            <p class="text-2xl font-extrabold font-mono text-[var(--maya-text-main)]">{{ totalStopsWeightLb.toFixed(1) }} lbs</p>
+                            <div class="mt-1 flex items-baseline justify-center gap-1.5">
+                                <p class="text-2xl font-extrabold font-mono text-[var(--maya-text-main)]">{{ totalStopsWeightLb.toFixed(1) }} lbs</p>
+                                <span
+                                    class="group relative inline-flex cursor-help items-center text-xs font-mono text-[var(--maya-text-muted)] hover:text-[var(--maya-primary)]"
+                                    :title="`Conversión: ${formatWeightKg(totalStopsWeightLb)}`"
+                                >
+                                    (~{{ formatWeightKg(totalStopsWeightLb) }})
+                                    <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:flex flex-col items-center z-30">
+                                        <span class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-mono font-bold text-white shadow-xl whitespace-nowrap dark:bg-slate-800 dark:border dark:border-slate-700">
+                                            ≈ {{ formatWeightKg(totalStopsWeightLb) }}
+                                        </span>
+                                        <span class="w-2 h-2 rotate-45 bg-slate-900 dark:bg-slate-800 -mt-1"></span>
+                                    </span>
+                                </span>
+                            </div>
                         </div>
                         <div class="rounded-xl border border-[var(--maya-border)] bg-[var(--maya-hover-surface)] p-3 text-center">
                             <p class="text-xs text-[var(--maya-text-muted)]">Uso de Capacidad</p>
@@ -2157,7 +2666,7 @@ onUnmounted(() => {
                         <h4 class="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--maya-text-muted)]">
                             Itinerario de Entrega (Secuencia Confirmada)
                         </h4>
-                        <div class="max-h-[220px] space-y-1.5 overflow-y-auto">
+                        <div class="max-h-[360px] space-y-1.5 overflow-y-auto">
                             <div
                                 v-for="item in wizardForm.items"
                                 :key="item.temp_id || item.id"
@@ -2175,7 +2684,7 @@ onUnmounted(() => {
                                     <span class="text-[var(--maya-text-muted)]">- {{ item.destination_address }}</span>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <span class="font-mono text-[11px]">{{ item.weight_lb }} lbs</span>
+                                    <span class="font-mono text-[11px]">{{ item.weight_lb }} lbs (~{{ formatWeightKg(item.weight_lb) }})</span>
                                     <span
                                         class="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
                                         :class="isPriorityHigh(item) ? 'bg-red-100 text-red-700' : isPriorityMedium(item) ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'"
@@ -2209,8 +2718,8 @@ onUnmounted(() => {
                         </button>
                     </div>
                 </div>
-            </div>
-        </Modal>
+            </section>
+        </div>
 
 
         <!-- ==================================================================== -->
