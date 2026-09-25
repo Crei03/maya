@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: maya_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:80"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_KEY=${APP_KEY:-base64:BmhxeFX+T5falQBq6HwPGg5gXEUkazuPYKDdVrrPADs=}
+      - APP_URL=http://localhost:8000
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=maya
+      - DB_USERNAME=maya_user
+      - DB_PASSWORD=maya_secret
+      - RUN_MIGRATIONS=false
+    depends_on:
+      - db
+    networks:
+      - maya_network
+
+  db:
+    image: mysql:8.0
+    container_name: maya_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: maya
+      MYSQL_USER: maya_user
+      MYSQL_PASSWORD: maya_secret
+      MYSQL_ROOT_PASSWORD: root_secret
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - maya_mysql_data:/var/lib/mysql
+    networks:
+      - maya_network
+
+volumes:
+  maya_mysql_data:
+    driver: local
+
+networks:
+  maya_network:
+    driver: bridge
