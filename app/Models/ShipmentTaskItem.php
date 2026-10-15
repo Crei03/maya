@@ -68,6 +68,7 @@ class ShipmentTaskItem extends Model
         'stop_order',
         'delivered_at',
         'return_reason',
+        'notes',
     ];
 
     protected function casts(): array

@@ -52,6 +52,7 @@ class DeliveryProof extends Model
         'shipment_id',
         'signature_url',
         'photo_url',
+        'photos',
         'gps_coords',
         'signed_by',
     ];
@@ -64,6 +65,7 @@ class DeliveryProof extends Model
     protected function casts(): array
     {
         return [
+            'photos' => 'array',
             'gps_coords' => 'array',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',

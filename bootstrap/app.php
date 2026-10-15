@@ -27,6 +27,18 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
 
+        $middleware->redirectUsersTo(function () {
+            $user = auth()->user();
+            if ($user?->isManagement()) {
+                return route('Management.dashboard', absolute: false);
+            }
+            if ($user?->isMessenger()) {
+                return route('driver.dashboard', absolute: false);
+            }
+
+            return route('admin.dashboard', absolute: false);
+        });
+
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
@@ -40,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant' => \App\Http\Middleware\EnsureTenant::class,
             'Management' => \App\Http\Middleware\EnsureManagement::class,
             'gestor' => \App\Http\Middleware\EnsureGestor::class,
+            'driver' => \App\Http\Middleware\EnsureDriver::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

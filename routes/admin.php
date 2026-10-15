@@ -243,3 +243,16 @@ Route::middleware(['auth', 'tenant', 'gestor'])
                 ->name('admin.shipment-tasks.unassign');
         });
     });
+
+// Driver / Messenger Routes (Mobile-first responsive)
+Route::middleware(['auth', 'tenant', 'driver'])
+    ->prefix('driver')
+    ->name('driver.')
+    ->group(function () {
+        Route::get('/', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/plans/{taskId}', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'tasks'])->name('tasks');
+        Route::post('/tasks/{itemId}/status', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'updateStatus'])->name('tasks.status');
+        Route::post('/tasks/{itemId}/comment', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'addComment'])->name('tasks.comment');
+        Route::get('/tasks/{itemId}/complete', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'completeView'])->name('tasks.complete');
+        Route::post('/tasks/{itemId}/complete', [\App\Http\Controllers\Driver\DriverDashboardController::class, 'storeComplete'])->name('tasks.complete.store');
+    });

@@ -42,6 +42,17 @@ class AuthenticatedSessionController extends Controller
             return redirect()->intended($url);
         }
 
+        // Messenger goes to mobile driver dashboard
+        if ($user->isMessenger()) {
+            if (config('multi-tenant.enabled') && ! app()->environment('local', 'development') && $user->tenant) {
+                $tenantUrl = 'http://'.$user->tenant->slug.'.'.parse_url(config('app.url'), PHP_URL_HOST).'/driver';
+
+                return redirect($tenantUrl);
+            }
+
+            return redirect()->route('driver.dashboard');
+        }
+
         // Single-tenant mode or local development: stay on current domain
         if (! config('multi-tenant.enabled') || app()->environment('local', 'development')) {
             $url = route('admin.dashboard', absolute: false);

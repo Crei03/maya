@@ -19,6 +19,10 @@ class EnsureGestor
     {
         $user = $request->user();
 
+        if ($user && $user->isMessenger()) {
+            return redirect()->route('driver.dashboard');
+        }
+
         if (! $user || ! $user->isGestor()) {
             abort(403, 'Access denied. Gestor only.');
         }
