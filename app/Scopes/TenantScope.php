@@ -18,9 +18,13 @@ class TenantScope implements Scope
     {
         $tenant = Tenant::current();
 
-        // If no tenant is current, try to use demo tenant (for local dev / tests)
+        // If no tenant is current, try to use authenticated user's tenant or demo tenant (for local dev / tests)
         if (! $tenant && ! config('multi-tenant.enabled')) {
-            $tenant = Tenant::query()->where('slug', 'demo')->first();
+            $user = auth()->user();
+            $tenant = ($user && $user->tenant)
+                ? $user->tenant
+                : Tenant::query()->where('slug', 'demo')->first();
+
             if ($tenant) {
                 $tenant->makeCurrent();
             }

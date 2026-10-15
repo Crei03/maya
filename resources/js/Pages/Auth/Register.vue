@@ -1,15 +1,35 @@
 <script setup>
 import GuestLayout from '@/Layouts/GuestLayout.vue';
-import InputError from '@/Components/input/InputError.vue';import InputLabel from '@/Components/input/InputLabel.vue';
+import InputError from '@/Components/input/InputError.vue';
+import InputLabel from '@/Components/input/InputLabel.vue';
 import PrimaryButton from '@/Components/buttons/PrimaryButton.vue';
 import TextInput from '@/Components/input/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
 
 const form = useForm({
+    company_name: '',
+    slug: '',
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
+});
+
+const slugify = (text) => {
+    return (text || '')
+        .toString()
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+};
+
+watch(() => form.company_name, (newName) => {
+    form.slug = slugify(newName);
 });
 
 const submit = () => {
@@ -21,78 +41,115 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Registro" />
+        <Head title="Registro de Paquetería" />
 
         <div class="space-y-8">
             <div class="space-y-3">
                 <p class="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--maya-text-muted)]">Onboarding</p>
-                <h1 class="text-3xl font-semibold tracking-tight text-[var(--maya-text-main)] sm:text-4xl">Crea tu cuenta</h1>
+                <h1 class="text-3xl font-semibold tracking-tight text-[var(--maya-text-main)] sm:text-4xl">Registra tu paquetería</h1>
                 <p class="max-w-xl text-sm leading-6 text-[var(--maya-text-muted)]">
-                    Establece acceso seguro para tu equipo y mantén las operaciones en movimiento desde el primer inicio de sesión.
+                    Crea el espacio de trabajo para tu empresa y el acceso del administrador principal para comenzar a operar.
                 </p>
             </div>
 
-            <form @submit.prevent="submit" class="space-y-5">
-                <div class="space-y-2">
-                    <InputLabel for="name" value="Nombre" />
-
-                    <TextInput
-                        id="name"
-                        type="text"
-                        class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
-                        v-model="form.name"
-                        required
-                        autofocus
-                        autocomplete="name"
-                    />
-
-                    <InputError class="mt-2" :message="form.errors.name" />
-                </div>
-
-                <div class="space-y-2">
-                    <InputLabel for="email" value="Correo electrónico" />
-
-                    <TextInput
-                        id="email"
-                        type="email"
-                        class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
-                        v-model="form.email"
-                        required
-                        autocomplete="username"
-                    />
-
-                    <InputError class="mt-2" :message="form.errors.email" />
-                </div>
-
-                <div class="grid gap-5 sm:grid-cols-2">
-                    <div class="space-y-2">
-                        <InputLabel for="password" value="Contraseña" />
-
-                        <TextInput
-                            id="password"
-                            type="password"
-                            class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
-                            v-model="form.password"
-                            required
-                            autocomplete="new-password"
-                        />
-
-                        <InputError class="mt-2" :message="form.errors.password" />
+            <form @submit.prevent="submit" class="space-y-6">
+                <!-- Sección Empresa / Tenant -->
+                <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 space-y-4">
+                    <div class="border-b border-[var(--maya-border)] pb-2">
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-[var(--maya-primary)]">Datos de la Empresa</h2>
                     </div>
 
                     <div class="space-y-2">
-                        <InputLabel for="password_confirmation" value="Confirmar contraseña" />
+                        <InputLabel for="company_name" value="Nombre de la Empresa / Paquetería *" />
 
                         <TextInput
-                            id="password_confirmation"
-                            type="password"
+                            id="company_name"
+                            type="text"
                             class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
-                            v-model="form.password_confirmation"
+                            v-model="form.company_name"
                             required
-                            autocomplete="new-password"
+                            autofocus
+                            placeholder="Ej. Transportes del Istmo"
                         />
 
-                        <InputError class="mt-2" :message="form.errors.password_confirmation" />
+                        <InputError class="mt-2" :message="form.errors.company_name" />
+
+                        <p class="mt-2 text-xs text-[var(--maya-text-muted)]">
+                            Tu dirección de acceso será: <span class="font-medium text-[var(--maya-primary)]">https://{{ form.slug || 'tu-empresa' }}.maya-efnj.onrender.com</span>
+                        </p>
+
+                        <InputError class="mt-2" :message="form.errors.slug" />
+                    </div>
+                </div>
+
+                <!-- Sección Administrador -->
+                <div class="rounded-2xl border border-[var(--maya-border)] bg-[var(--maya-bg-surface)] p-5 space-y-4">
+                    <div class="border-b border-[var(--maya-border)] pb-2">
+                        <h2 class="text-xs font-semibold uppercase tracking-wider text-[var(--maya-primary)]">Administrador Principal</h2>
+                    </div>
+
+                    <div class="space-y-2">
+                        <InputLabel for="name" value="Nombre y apellido *" />
+
+                        <TextInput
+                            id="name"
+                            type="text"
+                            class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
+                            v-model="form.name"
+                            required
+                            autocomplete="name"
+                            placeholder="Ej. Carlos Rodríguez"
+                        />
+
+                        <InputError class="mt-2" :message="form.errors.name" />
+                    </div>
+
+                    <div class="space-y-2">
+                        <InputLabel for="email" value="Correo electrónico *" />
+
+                        <TextInput
+                            id="email"
+                            type="email"
+                            class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
+                            v-model="form.email"
+                            required
+                            autocomplete="username"
+                            placeholder="admin@transportes.com"
+                        />
+
+                        <InputError class="mt-2" :message="form.errors.email" />
+                    </div>
+
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <div class="space-y-2">
+                            <InputLabel for="password" value="Contraseña *" />
+
+                            <TextInput
+                                id="password"
+                                type="password"
+                                class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
+                                v-model="form.password"
+                                required
+                                autocomplete="new-password"
+                            />
+
+                            <InputError class="mt-2" :message="form.errors.password" />
+                        </div>
+
+                        <div class="space-y-2">
+                            <InputLabel for="password_confirmation" value="Confirmar contraseña *" />
+
+                            <TextInput
+                                id="password_confirmation"
+                                type="password"
+                                class="block w-full rounded-2xl border-[var(--maya-border)] bg-[var(--maya-bg-surface)] px-4 py-3 text-[var(--maya-text-main)] shadow-sm placeholder:text-[var(--maya-text-muted)] focus:border-[var(--maya-primary)] focus:ring-[var(--maya-primary)] dark:bg-[var(--maya-bg-base)] dark:text-[var(--maya-text-main)]"
+                                v-model="form.password_confirmation"
+                                required
+                                autocomplete="new-password"
+                            />
+
+                            <InputError class="mt-2" :message="form.errors.password_confirmation" />
+                        </div>
                     </div>
                 </div>
 
@@ -109,7 +166,7 @@ const submit = () => {
                         :class="{ 'opacity-25': form.processing }"
                         :disabled="form.processing"
                     >
-                        Register
+                        Registrar Paquetería
                     </PrimaryButton>
                 </div>
             </form>

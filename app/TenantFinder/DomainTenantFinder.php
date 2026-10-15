@@ -12,8 +12,13 @@ class DomainTenantFinder extends TenantFinder
 {
     public function findForRequest(Request $request): ?Tenant
     {
-        // If multi-tenant is disabled, use demo tenant
+        // If multi-tenant is disabled, use authenticated user's tenant if available, otherwise demo
         if (! config('multi-tenant.enabled')) {
+            $user = $request->user();
+            if ($user && $user->tenant_id) {
+                return Tenant::find($user->tenant_id);
+            }
+
             return Tenant::query()->where('slug', 'demo')->first();
         }
 

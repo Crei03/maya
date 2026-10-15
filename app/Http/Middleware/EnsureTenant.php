@@ -30,11 +30,14 @@ class EnsureTenant
 
         // Skip tenant check if multi-tenant is disabled
         if (! config('multi-tenant.enabled')) {
-            // Still set current tenant to demo for data isolation
-            $tenant = Tenant::query()->where('slug', 'demo')->first();
+            $user = $request->user();
+            $tenant = ($user && $user->tenant)
+                ? $user->tenant
+                : Tenant::query()->where('slug', 'demo')->first();
+
             if ($tenant) {
                 $tenant->makeCurrent();
-                \Log::info('Tenant set to demo', ['tenant_id' => $tenant->id]);
+                \Log::info('Tenant set for single-tenant mode', ['tenant_id' => $tenant->id, 'slug' => $tenant->slug]);
             }
 
             return $next($request);
